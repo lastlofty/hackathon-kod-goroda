@@ -36,10 +36,10 @@ function createDrivePlayer(map, route, onEnter) {
     return {point, heading: Math.atan2(dx, dy) / degrees};
   }
 
-  function render() {
+  function render(deltaMs) {
     const distance = length * elapsed / playTime;
     const {point, heading} = poseAt(distance);
-    map.updateDrive(point, heading);
+    map.updateDrive(point, heading, deltaMs);
     progress.value = Math.round(elapsed / playTime * 1000);
   }
 
@@ -58,19 +58,18 @@ function createDrivePlayer(map, route, onEnter) {
   }
 
   function tick(time) {
-    if (!last) last = time;
-    if (time - last >= 30) {
-      elapsed = Math.min(playTime, elapsed + Math.min(100, time - last));
-      last = time;
-      render();
-    }
+    const deltaMs = last ? Math.min(100, time - last) : 0;
+    last = time;
+    elapsed = Math.min(playTime, elapsed + deltaMs);
+    render(deltaMs);
     if (elapsed < playTime) frame = requestAnimationFrame(tick);
     else pause();
   }
 
   function start() {
+    const snap = !inDrive || elapsed === 0;
     enter();
-    render();
+    if (snap) render();
     toggle.textContent = 'Пауза';
     frame = requestAnimationFrame(tick);
   }

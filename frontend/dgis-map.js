@@ -129,7 +129,49 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
   const center = focus[Math.floor(focus.length / 2)] ?? [0, 0];
   let map;
   let vehicle;
+  let carIcon;
+  let driveGestures;
+  let targetZoom;
   let overview;
+
+  function setDriveZoom(value, duration) {
+    targetZoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), value));
+    map.setZoom(targetZoom, {duration});
+  }
+
+  function enableDriveGestures() {
+    driveGestures = new AbortController();
+    const options = {signal: driveGestures.signal, passive: false, capture: true};
+    let pinchDistance = 0;
+    // Native pointer-anchored zoom also pans the map, competing with follow mode.
+    map.blockInteraction();
+    container.addEventListener('wheel', event => {
+      event.preventDefault();
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? container.clientHeight : 1;
+      const delta = -event.deltaY * unit * (event.ctrlKey ? 0.012 : 0.003);
+      setDriveZoom(targetZoom + Math.max(-1, Math.min(1, delta)), 140);
+    }, options);
+    container.addEventListener('dblclick', event => {
+      event.preventDefault();
+      setDriveZoom(targetZoom + (event.shiftKey ? -1 : 1), 180);
+    }, options);
+    function pinch(event) {
+      if (event.touches.length !== 2) {
+        pinchDistance = 0;
+        return;
+      }
+      event.preventDefault();
+      const [a, b] = event.touches;
+      const span = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      if (span && pinchDistance && event.type === 'touchmove') {
+        setDriveZoom(targetZoom + Math.log2(span / pinchDistance), 0);
+      }
+      pinchDistance = span;
+    }
+    for (const type of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+      container.addEventListener(type, pinch, options);
+    }
+  }
   const fitPoints = (coordinates, duration = 250) => {
     if (!coordinates.length) return;
     if (coordinates.length === 1) {
@@ -192,21 +234,30 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
     fitPoints,
     startDrive(point) {
       overview = {center: map.getCenter().slice(), zoom: map.getZoom(), rotation: map.getRotation(), pitch: map.getPitch()};
-      const model = document.createElement('div');
-      model.className = 'route-car';
-      model.setAttribute('aria-label', 'Машина');
-      vehicle = new api.HtmlMarker(map, {coordinates: point, html: model, anchor: [10, 15], zIndex: 20});
-      map.setZoom(17.6, {duration: 0});
+      carIcon = document.createElement('div');
+      carIcon.className = 'route-car';
+      carIcon.setAttribute('aria-label', 'Машина');
+      vehicle = new api.HtmlMarker(map, {coordinates: point, html: carIcon, anchor: [10, 15], zIndex: 20, disableRounding: true});
+      enableDriveGestures();
+      setDriveZoom(17.6, 0);
       map.setPitch(52, {duration: 0});
     },
-    updateDrive(point, heading) {
+    updateDrive(point, heading, deltaMs) {
       vehicle?.setCoordinates(point);
       map.setCenter(point, {duration: 0});
-      map.setRotation(-heading, {duration: 0});
+      const rotation = map.getRotation();
+      const turn = ((-heading - rotation + 540) % 360) - 180;
+      const blend = deltaMs === undefined ? 1 : -Math.expm1(-deltaMs / 160);
+      const cameraRotation = rotation + turn * blend;
+      map.setRotation(cameraRotation, {duration: 0});
+      carIcon.style.rotate = (heading + cameraRotation) + 'deg';
     },
     endDrive() {
+      driveGestures.abort();
+      map.unblockInteraction();
       vehicle?.destroy();
       vehicle = null;
+      carIcon = null;
       map.setPitch(overview.pitch, {duration: 0});
       map.setRotation(overview.rotation, {duration: 0});
       map.setZoom(overview.zoom, {duration: 0});
@@ -214,7 +265,10 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
       overview = null;
     },
     panTo: point => map.setCenter(point, {duration: 250}),
-    zoom: direction => map.setZoom(Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), map.getZoom() + direction)), {duration: 200}),
+    zoom(direction) {
+      if (vehicle) setDriveZoom(targetZoom + direction, 180);
+      else map.setZoom(Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), map.getZoom() + direction)), {duration: 200});
+    },
     setMarkers(records, selected) {
       const visible = new Set(records.map(record => record.id));
       for (const [id, entry] of markers) {
