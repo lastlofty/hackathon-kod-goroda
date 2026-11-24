@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Any
 
-import httpx2
-
 
 class DgisError(Exception):
     """A safe integration error that does not expose credentials."""
@@ -11,6 +9,21 @@ class DgisError(Exception):
         super().__init__(message)
         self.message = message
         self.provider_code = provider_code
+
+
+class DgisUnavailable(DgisError):
+    """Raised when the optional HTTP client dependency cannot be imported."""
+
+
+def load_http_client() -> Any:
+    try:
+        import httpx2
+    except Exception as exc:
+        raise DgisUnavailable("2GIS HTTP client is unavailable") from exc
+    required = ("AsyncClient", "TimeoutException", "RequestError")
+    if not all(hasattr(httpx2, name) for name in required):
+        raise DgisUnavailable("2GIS HTTP client is incompatible")
+    return httpx2
 
 
 @dataclass(frozen=True)
@@ -57,14 +70,15 @@ class DgisClient:
     async def _request(self, params: dict[str, Any]) -> dict[str, Any]:
         request_params = {**params, "key": self.api_key, "locale": self.locale}
         url = f"{self.base_url.rstrip('/')}/3.0/items/geocode"
+        http = load_http_client()
 
         try:
-            async with httpx2.AsyncClient(timeout=self.timeout_seconds) as client:
+            async with http.AsyncClient(timeout=self.timeout_seconds) as client:
                 response = await client.get(url, params=request_params)
                 payload = response.json()
-        except httpx2.TimeoutException as exc:
+        except http.TimeoutException as exc:
             raise DgisError("2GIS request timed out") from exc
-        except (httpx2.RequestError, ValueError) as exc:
+        except Exception as exc:
             raise DgisError("2GIS service is unavailable") from exc
 
         meta = payload.get("meta", {})
