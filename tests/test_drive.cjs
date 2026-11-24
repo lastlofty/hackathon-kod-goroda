@@ -33,7 +33,7 @@ function playerFixture() {
     callbacks.delete(id);
     callback(time);
   }
-  return {elements, calls, player, tick};
+  return {elements, calls, player, tick, hasPendingFrame: () => callbacks.size > 0};
 }
 
 test('natural completion restores the overview and allows another drive', () => {
@@ -60,4 +60,23 @@ test('seeking to the end restores the overview; exit does not repeat it', () => 
   assert.equal(calls.endOptions[0], undefined);
   player.exit();
   assert.equal(calls.end, 1);
+});
+
+test('grabbing the slider pauses immediately and seeking waits for explicit playback', () => {
+  const {elements, tick, hasPendingFrame} = playerFixture();
+  const play = elements['drive-play'];
+  const slider = elements['drive-progress'];
+  play.onclick();
+  slider.onpointerdown({isPrimary: true, button: 0});
+  assert.equal(hasPendingFrame(), false);
+  slider.value = 400;
+  slider.oninput();
+  assert.equal(hasPendingFrame(), false);
+  assert.equal(play.textContent, 'Проезд 3D');
+  play.onclick();
+  tick(1000);
+  tick(1100);
+  assert.ok(slider.value > 400);
+  slider.onkeydown({key: 'ArrowLeft'});
+  assert.equal(hasPendingFrame(), false);
 });

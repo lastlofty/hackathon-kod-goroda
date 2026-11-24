@@ -94,6 +94,12 @@ function createDrivePlayer(map, route, onEnter) {
     elapsed = 0;
     start();
   };
+  progress.onpointerdown = event => {
+    if (event.isPrimary && event.button === 0) pause();
+  };
+  progress.onkeydown = event => {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) pause();
+  };
   progress.oninput = () => {
     pause();
     elapsed = Number(progress.value) / 1000 * playTime;
