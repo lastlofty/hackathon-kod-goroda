@@ -59,7 +59,8 @@ function createDrivePlayer(map, route, onEnter) {
 
   function finish() {
     pause();
-    map.endDrive({keepCamera: true});
+    if (!inDrive) return;
+    map.endDrive();
     inDrive = false;
   }
 
@@ -96,6 +97,7 @@ function createDrivePlayer(map, route, onEnter) {
   progress.oninput = () => {
     pause();
     elapsed = Number(progress.value) / 1000 * playTime;
+    if (elapsed === playTime && !inDrive) return;
     enter();
     render();
     if (elapsed === playTime) finish();

@@ -27,9 +27,10 @@ workspace -> media -> processing job -> findings
 ## Быстрый старт
 
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
+
+В репозитории есть `.env` с настройками текущего стенда. Для другого окружения создайте свой файл по образцу `.env.example`.
 
 В другом терминале из корня репозитория запустите интерфейс:
 
