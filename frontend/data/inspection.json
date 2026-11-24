@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "moscow-open-data-demo",
+  "coordinateOrder": "longitude,latitude",
+  "coordinateSpace": "normalized-image-xywh",
+  "route": [],
+  "frames": [
+    {
+      "id": "frame-01",
+      "name": "Улица · демоснимок",
+      "src": "./assets/road.webp",
+      "time": "Демо",
+      "demo": true,
+      "boxes": [
+        {
+          "id": "m-01",
+          "label": "Кабельный колодец",
+          "x": 0.41,
+          "y": 0.74,
+          "w": 0.16,
+          "h": 0.1,
+          "source": "demo"
+        },
+        {
+          "id": "m-02",
+          "label": "Опора освещения",
+          "x": 0.79,
+          "y": 0.01,
+          "w": 0.052,
+          "h": 0.59,
+          "source": "demo"
+        }
+      ]
+    },
+    {
+      "id": "frame-02",
+      "name": "Опора · демоснимок",
+      "src": "./assets/pole.webp",
+      "time": "Демо",
+      "demo": true,
+      "boxes": [
+        {
+          "id": "m-03",
+          "label": "Опора связи",
+          "x": 0.555,
+          "y": 0.01,
+          "w": 0.12,
+          "h": 0.84,
+          "source": "demo"
+        },
+        {
+          "id": "m-04",
+          "label": "Шкаф связи",
+          "x": 0.67,
+          "y": 0.66,
+          "w": 0.08,
+          "h": 0.2,
+          "source": "demo"
+        }
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "id": "ОО-001",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Страстной бульвар",
+      "point": [
+        37.6071196,
+        55.7656558
+      ],
+      "pointKind": "asset",
+      "origin": "reference",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/6767113307"
+      }
+    },
+    {
+      "id": "ОО-002",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Страстной бульвар",
+      "point": [
+        37.6066921,
+        55.7654712
+      ],
+      "pointKind": "asset",
+      "origin": "reference",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/6767113300"
+      }
+    },
+    {
+      "id": "ОО-003",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Страстной бульвар",
+      "point": [
+        37.6062949,
+        55.765297
+      ],
+      "pointKind": "asset",
+      "origin": "reference",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/6767113315"
+      }
+    },
+    {
+      "id": "ОО-004",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Страстной бульвар",
+      "point": [
+        37.605416,
+        55.7649747
+      ],
+      "pointKind": "asset",
+      "origin": "reference",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/6767113303"
+      }
+    },
+    {
+      "id": "ОО-005",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Тверской бульвар",
+      "point": [
+        37.6046648,
+        55.7645994
+      ],
+      "pointKind": "asset",
+      "origin": "reference",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/6767113306"
+      }
+    },
+    {
+      "id": "ОО-006",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Тверской бульвар",
+      "point": [
+        37.6046956,
+        55.7643502
+      ],
+      "pointKind": "asset",
+      "origin": "reference",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/6767113301"
+      }
+    }
+  ],
+  "drivingStops": [
+    [
+      37.609508,
+      55.766393
+    ],
+    [
+      37.6075389,
+      55.7656736
+    ],
+    [
+      37.6034922,
+      55.7634957
+    ],
+    [
+      37.59975,
+      55.7604
+    ]
+  ]
+}

@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     dgis_locale: str = "ru_RU"
     dgis_timeout_seconds: float = Field(default=30, gt=0, le=60)
 
+    frontend_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:8778", "http://127.0.0.1:8778"]
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

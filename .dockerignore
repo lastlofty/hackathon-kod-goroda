@@ -11,3 +11,5 @@ test-uploads
 tmp
 uploads/*
 !uploads/.gitkeep
+frontend/
+mgts-mockups.html

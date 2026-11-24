@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="mgts-dgis-api-key" content="">
+<meta name="mgts-inspection-data" content="./data/inspection.json">
+<meta name="mgts-workspace" content="mgts">
+<meta name="mgts-backend-api" content="http://localhost:8080">
+<title>МГТС · Обследование сети</title>
+<link rel="stylesheet" href="./styles.css?v=f3a3f570e64d">
+<script defer src="./dgis-map.js?v=a1ba8813ec11"></script>
+<script defer src="./drive.js?v=61511cc4c60d"></script>
+<script defer src="./backend-api.js"></script>
+<script defer src="./app.js?v=979bce9f55f7"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="identity"><b>МГТС</b><span>Обследование сети</span></div>
+  <nav aria-label="Разделы">
+    <button data-view="map" aria-pressed="true">Карта</button>
+    <button data-view="registry" aria-pressed="false">Реестр</button>
+    <button data-view="history" aria-pressed="false">История</button>
+  </nav>
+  <button class="button primary" data-action="upload" disabled>Загрузить фото</button>
+</header>
+<main>
+  <header class="survey-bar">
+    <div class="survey-title"><span id="data-mode" class="subtle">Демоданные</span><h1 id="page-title" hidden></h1></div>
+    <div class="totals" id="totals" aria-label="Сводка обследования"></div>
+    <button class="button" data-action="export">Экспорт CSV</button>
+  </header>
+  <section id="map-view" class="map-view" aria-label="Карта и карточка объекта">
+    <div class="map-area">
+      <div id="map" aria-label="Карта объектов"></div>
+      <div class="map-controls">
+        <div class="map-tools">
+        <button class="button" data-action="fit" id="fit-button" hidden>Весь маршрут</button>
+        <button class="button" data-action="pin" id="pin-button" aria-pressed="false" hidden>+ Поставить точку</button>
+        <button class="button" type="button" data-action="map-settings" id="map-provider">Подключить 2ГИС</button>
+        </div>
+        <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
+          <button id="drive-play" type="button" class="button">Проезд 3D</button>
+          <button id="drive-restart" type="button" class="button icon" aria-label="С начала" title="С начала">↻</button>
+          <input id="drive-progress" type="range" min="0" max="1000" value="0" aria-label="Позиция машины на маршруте">
+          <span id="drive-detail" class="mono"></span>
+        </div>
+        <div id="map-status" class="map-status" role="status">Подключите 2ГИС, чтобы открыть маршрут и точки.</div>
+      </div>
+      <div id="provider-zoom" class="provider-zoom" hidden>
+        <button class="button icon" type="button" data-action="zoom-in" aria-label="Приблизить">+</button>
+        <button class="button icon" type="button" data-action="zoom-out" aria-label="Отдалить">−</button>
+      </div>
+    </div>
+    <aside class="inspector" aria-label="Выбранный объект">
+      <div class="inspector-bar">
+        <label class="filter-label">Статус
+          <select id="priority-filter" aria-label="Фильтр объектов по статусу">
+            <option value="all">Все объекты</option><option value="urgent">Срочно</option><option value="review">На проверку</option><option value="normal">Без замечаний</option><option value="unverified">Не обследовано</option>
+          </select>
+        </label>
+        <div class="stepper"><button class="button icon" data-action="prev" aria-label="Предыдущий объект">‹</button><span id="position"></span><button class="button icon" data-action="next" aria-label="Следующий объект">›</button></div>
+      </div>
+      <details class="status-guide">
+        <summary>Условные обозначения</summary>
+        <ul>
+          <li><i class="dot urgent"></i>Срочно</li>
+          <li><i class="dot review"></i>На проверку</li>
+          <li><i class="dot normal"></i>Без замечаний</li>
+          <li><i class="dot unverified"></i>Не обследовано</li>
+        </ul>
+        <p id="route-credit"></p>
+      </details>
+      <div id="inspector-content"></div>
+    </aside>
+  </section>
+  <section id="list-view" class="list-view" hidden aria-label="Список записей"></section>
+</main>
+<dialog id="annotator" aria-labelledby="edit-title">
+  <div class="dialog-head"><div><h2 id="edit-title">Разметка кадра</h2><p id="editor-filename" class="subtle mono"></p></div><button class="button icon" data-action="close-editor" aria-label="Закрыть разметку">×</button></div>
+  <div class="editor-tools">
+    <label>Класс <select id="box-type"><option>Кабельный колодец</option><option>Опора связи</option><option>Шкаф связи</option><option>Другое</option></select></label>
+    <button class="button" data-action="draw" aria-pressed="true">Новая рамка</button>
+    <button class="button" data-action="redraw" aria-pressed="false">Перерисовать</button>
+    <button class="button" data-action="delete-box">Удалить</button>
+    <button class="button" data-action="box-json">JSON рамок</button>
+  </div>
+  <div class="edit-body">
+    <div class="edit-viewport"><div id="editor-image" class="editor-image"><img id="edit-photo" alt="Снимок для ручной разметки" draggable="false"><div id="edit-boxes"></div></div></div>
+    <aside id="boxes-list" class="boxes-list" aria-label="Рамки на кадре"></aside>
+  </div>
+  <div class="dialog-foot"><span id="editor-hint" class="subtle" role="status">Потяни от одного угла рамки до противоположного.</span><button class="button primary" data-action="save-boxes">Сохранить</button></div>
+</dialog>
+<dialog id="box-json-dialog" aria-labelledby="box-json-title">
+  <div class="dialog-head"><h2 id="box-json-title">JSON рамок кадра</h2><button class="button icon" data-action="close-json" aria-label="Закрыть JSON">×</button></div>
+  <div class="json-editor">
+    <label for="box-json-text">Массив рамок · x, y, w, h в долях от размера снимка</label>
+    <textarea id="box-json-text" spellcheck="false" rows="13"></textarea>
+    <label>Открыть JSON <input id="box-json-file" type="file" accept=".json,application/json"></label>
+    <p id="box-json-error" role="alert"></p>
+  </div>
+  <div class="dialog-foot"><button class="button" data-action="export-boxes">Скачать JSON</button><button class="button primary" data-action="apply-json">Применить к кадру</button></div>
+</dialog>
+<dialog id="upload-dialog" aria-labelledby="upload-title">
+  <form id="upload-form">
+    <div class="dialog-head"><h2 id="upload-title">Добавить снимок</h2><button type="button" class="button icon" data-action="close-upload" aria-label="Закрыть загрузку">×</button></div>
+    <label class="file-field">Фотография<input id="file" type="file" accept="image/*" required></label>
+    <div class="dialog-foot"><span class="subtle" id="upload-message" role="status">Снимок откроется для ручной разметки.</span><button type="submit" class="button primary">Открыть снимок</button></div>
+  </form>
+</dialog>
+<dialog id="map-settings" aria-labelledby="map-settings-title">
+  <form id="map-settings-form">
+    <div class="dialog-head"><h2 id="map-settings-title">2ГИС</h2><button type="button" class="button icon" data-action="close-map-settings" aria-label="Закрыть настройки карты">×</button></div>
+    <label class="file-field">Ключ Map Tiles API
+      <input id="map-key-input" type="password" autocomplete="off" spellcheck="false" maxlength="200" required>
+    </label>
+    <p class="map-settings-note subtle" id="map-settings-note" role="status">Подойдёт демо-ключ 2ГИС с доступом к Map Tiles API.</p>
+    <p class="map-settings-note subtle"><a href="https://platform.2gis.ru/ru/" target="_blank" rel="noopener noreferrer">Менеджер Платформы</a> · <a href="https://docs.2gis.com/platform-manager/demo-key" target="_blank" rel="noopener noreferrer">Получить демо-ключ</a></p>
+    <div class="dialog-foot"><button class="button" type="button" data-action="reset-map-key" id="map-key-reset" hidden>Сбросить ключ</button><button class="button primary" type="submit">Подключить</button></div>
+  </form>
+</dialog>
+<output id="notice" class="notice" role="status" hidden></output>
+</body>
+</html>
