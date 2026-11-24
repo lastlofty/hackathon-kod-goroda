@@ -214,6 +214,21 @@ def test_upload_requires_workspace_and_validates_content_type(
     assert response.json()["url"].endswith(".png")
 
 
+def test_media_coordinate_pair_and_required_fields(client: TestClient) -> None:
+    workspace = create_workspace(client)
+    url = "/api/v1/media"
+    data = {"workspace_id": workspace["id"], "url": "https://example.test/frame.png"}
+    assert client.post(url, json={**data, "latitude": 55}).status_code == 422
+    created = client.post(url, json={**data, "latitude": 55, "longitude": 37})
+    assert created.status_code == 201
+    item = f"{url}/{created.json()['id']}"
+    assert client.patch(item, json={"latitude": 56}).status_code == 200
+    assert client.patch(item, json={"longitude": None}).status_code == 422
+    for field in ("kind", "url", "attributes"):
+        assert client.patch(item, json={field: None}).status_code == 422
+    assert client.patch(item, json={"latitude": None, "longitude": None}).status_code == 200
+
+
 def test_geocoding_requires_configuration(client: TestClient) -> None:
     response = client.get("/api/v1/geocoding/search", params={"q": "Москва"})
     assert response.status_code == 503

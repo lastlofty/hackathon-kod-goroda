@@ -26,6 +26,14 @@ settings = get_settings()
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
+def validate_coordinates(latitude: float | None, longitude: float | None) -> None:
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="latitude and longitude must be provided together",
+        )
+
+
 @router.get("", response_model=list[MediaRead])
 def list_media(
     db: DbSession,
@@ -45,6 +53,7 @@ def list_media(
 @router.post("", response_model=MediaRead, status_code=status.HTTP_201_CREATED)
 def create_media(payload: MediaCreate, db: DbSession) -> Media:
     ensure_workspace(db, payload.workspace_id)
+    validate_coordinates(payload.latitude, payload.longitude)
     return commit(db, Media(**payload.model_dump()))
 
 
@@ -60,11 +69,7 @@ async def upload_image(
     source: Annotated[str | None, Form(max_length=128)] = None,
 ) -> Media:
     ensure_workspace(db, workspace_id)
-    if (latitude is None) != (longitude is None):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="latitude and longitude must be provided together",
-        )
+    validate_coordinates(latitude, longitude)
     if file.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(
             status_code=415, detail="Only JPEG, PNG and WebP images are supported"
@@ -109,6 +114,14 @@ def get_media(media_id: UUID, db: DbSession) -> Media:
 @router.patch("/{media_id}", response_model=MediaRead)
 def update_media(media_id: UUID, payload: MediaUpdate, db: DbSession) -> Media:
     media = get_or_404(db, Media, media_id)
+    changes = payload.model_dump(exclude_unset=True)
+    for field in ("kind", "url", "attributes"):
+        if field in changes and changes[field] is None:
+            raise HTTPException(status_code=422, detail=f"{field} cannot be null")
+    validate_coordinates(
+        changes.get("latitude", media.latitude),
+        changes.get("longitude", media.longitude),
+    )
     return commit(db, apply_patch(media, payload))
 
 
