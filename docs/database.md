@@ -1,64 +1,103 @@
 # Схема базы данных
 
-Схема покрывает минимальный цикл: медиафайл поступает в систему, модель находит объект, а результат анализа сохраняется как осмотр.
+## Связи
 
 ```mermaid
 erDiagram
-    ASSETS ||--o{ INSPECTIONS : "имеет историю"
-    MEDIA ||--o{ INSPECTIONS : "служит источником"
+    WORKSPACES ||--o{ ENTITY_TYPES : configures
+    WORKSPACES ||--o{ ENTITIES : owns
+    WORKSPACES ||--o{ MEDIA : owns
+    WORKSPACES ||--o{ PROCESSING_JOBS : owns
+    WORKSPACES ||--o{ FINDINGS : owns
+    ENTITY_TYPES o|--o{ ENTITIES : validates
+    MEDIA o|--o{ PROCESSING_JOBS : processed_by
+    ENTITIES o|--o{ FINDINGS : describes
+    MEDIA o|--o{ FINDINGS : source_for
+    PROCESSING_JOBS o|--o{ FINDINGS : produces
 
-    ASSETS {
+    WORKSPACES {
         uuid id PK
-        string external_id UK
-        string asset_type
+        string slug UK
         string name
         text description
+        json settings
+    }
+
+    ENTITY_TYPES {
+        uuid id PK
+        uuid workspace_id FK
+        string code
+        string name
+        json attribute_schema
+        boolean active
+    }
+
+    ENTITIES {
+        uuid id PK
+        uuid workspace_id FK
+        uuid entity_type_id FK
+        string external_id
+        string name
+        json attributes
+        json geometry
         float latitude
         float longitude
-        string address
-        timestamptz created_at
-        timestamptz updated_at
     }
 
     MEDIA {
         uuid id PK
-        string media_type
+        uuid workspace_id FK
+        string kind
         text url
-        string original_filename
         string content_type
         timestamptz captured_at
-        float latitude
-        float longitude
-        string source
-        timestamptz created_at
-        timestamptz updated_at
+        json attributes
     }
 
-    INSPECTIONS {
+    PROCESSING_JOBS {
         uuid id PK
-        uuid asset_id FK
+        uuid workspace_id FK
         uuid media_id FK
-        timestamptz observed_at
-        string condition
-        string defect_type
-        float confidence
-        int severity
-        text recommendation
-        json bbox
-        string model_name
-        string model_version
+        string pipeline
+        string status
+        json parameters
+        json result
+        text error_message
+    }
+
+    FINDINGS {
+        uuid id PK
+        uuid workspace_id FK
+        uuid entity_id FK
+        uuid media_id FK
+        uuid job_id FK
+        string category
+        string label
+        string status
+        float score
+        float severity
+        json geometry
+        json attributes
         boolean reviewed
-        timestamptz created_at
-        timestamptz updated_at
     }
 ```
 
-## Справочные значения
+## Инварианты
 
-- `asset_type`: `cable_well`, `dual_purpose_support`, `other`.
-- `condition`: `normal`, `attention`, `repair`, `critical`.
-- `confidence`: уверенность модели от 0 до 1.
-- `severity`: оценка опасности от 0 до 100, не вероятность.
-- `bbox`: координаты области детекции, например `{"x": 10, "y": 20, "width": 100, "height": 80}`.
+- `workspace.slug` уникален во всей системе.
+- `entity_type.code` уникален внутри workspace.
+- `entity.external_id` уникален внутри workspace; `NULL` разрешён.
+- `finding.score` равен `NULL` или находится в диапазоне от 0 до 1.
+- Связанные entity type, entity, media и job должны относиться к тому же workspace. Это проверяет service layer до записи.
+- `entity.attributes` проверяется по JSON Schema выбранного `entity_type`.
+- Координаты передаются только парой: latitude вместе с longitude.
 
-PostGIS на старте не нужен: для MVP карта получает объекты по прямоугольнику из `min_lat`, `max_lat`, `min_lon`, `max_lon`. Если появятся поиск по радиусу или маршруты, координаты можно мигрировать в `geography(Point, 4326)`.
+## Удаление
+
+- Удаление workspace каскадно удаляет принадлежащие ему данные.
+- Удаление entity type оставляет entity, но устанавливает `entity_type_id = NULL`.
+- Удаление entity, media или job не удаляет finding, а обнуляет соответствующую ссылку. Результат остаётся для аудита.
+
+## Геоданные
+
+Для начальной карты используются индексированные `latitude` и `longitude`. Произвольная точка, bbox, polygon или координаты изображения могут храниться в `geometry`. PostGIS следует добавлять только при подтверждённой необходимости радиусного поиска, пространственных пересечений или маршрутизации.

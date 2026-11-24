@@ -5,14 +5,15 @@ from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-
 ModelT = TypeVar("ModelT")
 
 
 def get_or_404(db: Session, model: type[ModelT], entity_id: Any) -> ModelT:
     entity = db.get(model, entity_id)
     if entity is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found"
+        )
     return entity
 
 

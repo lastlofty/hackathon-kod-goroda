@@ -3,15 +3,24 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import select
 
 from app.api.deps import DbSession
 from app.api.utils import apply_patch, commit, get_or_404
 from app.core.config import get_settings
 from app.models.media import Media
-from app.schemas.media import MediaCreate, MediaRead, MediaType, MediaUpdate
-
+from app.schemas.media import MediaCreate, MediaRead, MediaUpdate
+from app.services.references import ensure_workspace
 
 router = APIRouter(prefix="/media", tags=["media"])
 settings = get_settings()
@@ -21,18 +30,22 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 @router.get("", response_model=list[MediaRead])
 def list_media(
     db: DbSession,
-    media_type: MediaType | None = None,
+    workspace_id: UUID | None = None,
+    kind: str | None = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[Media]:
     query = select(Media).order_by(Media.created_at.desc()).offset(offset).limit(limit)
-    if media_type:
-        query = query.where(Media.media_type == media_type.value)
+    if workspace_id:
+        query = query.where(Media.workspace_id == workspace_id)
+    if kind:
+        query = query.where(Media.kind == kind)
     return list(db.scalars(query))
 
 
 @router.post("", response_model=MediaRead, status_code=status.HTTP_201_CREATED)
 def create_media(payload: MediaCreate, db: DbSession) -> Media:
+    ensure_workspace(db, payload.workspace_id)
     return commit(db, Media(**payload.model_dump()))
 
 
@@ -40,13 +53,23 @@ def create_media(payload: MediaCreate, db: DbSession) -> Media:
 async def upload_image(
     db: DbSession,
     file: Annotated[UploadFile, File()],
+    workspace_id: Annotated[UUID, Form()],
+    kind: Annotated[str, Form(min_length=1, max_length=64)] = "image",
     captured_at: Annotated[datetime | None, Form()] = None,
     latitude: Annotated[float | None, Form(ge=-90, le=90)] = None,
     longitude: Annotated[float | None, Form(ge=-180, le=180)] = None,
     source: Annotated[str | None, Form(max_length=128)] = None,
 ) -> Media:
+    ensure_workspace(db, workspace_id)
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="latitude and longitude must be provided together",
+        )
     if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=415, detail="Only JPEG, PNG and WebP images are supported")
+        raise HTTPException(
+            status_code=415, detail="Only JPEG, PNG and WebP images are supported"
+        )
 
     content = await file.read(settings.max_upload_size_mb * 1024 * 1024 + 1)
     if len(content) > settings.max_upload_size_mb * 1024 * 1024:
@@ -59,7 +82,8 @@ async def upload_image(
     destination.write_bytes(content)
 
     media = Media(
-        media_type=MediaType.IMAGE.value,
+        workspace_id=workspace_id,
+        kind=kind,
         url=f"/uploads/{filename}",
         original_filename=file.filename,
         content_type=file.content_type,
