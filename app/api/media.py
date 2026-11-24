@@ -1,5 +1,4 @@
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -75,7 +74,14 @@ async def upload_image(
     if len(content) > settings.max_upload_size_mb * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File is too large")
 
-    suffix = Path(file.filename or "upload").suffix.lower()
+    signatures = {
+        "image/jpeg": (content.startswith(b"\xff\xd8\xff"), ".jpg"),
+        "image/png": (content.startswith(b"\x89PNG\r\n\x1a\n"), ".png"),
+        "image/webp": (content[:4] == b"RIFF" and content[8:12] == b"WEBP", ".webp"),
+    }
+    valid, suffix = signatures[file.content_type]
+    if not valid:
+        raise HTTPException(status_code=415, detail="File contents do not match image type")
     filename = f"{uuid4()}{suffix}"
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     destination = settings.upload_dir / filename

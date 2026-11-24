@@ -193,6 +193,13 @@ def test_upload_requires_workspace_and_validates_content_type(
     response = client.post(
         "/api/v1/media/upload",
         files={"file": ("frame.png", b"fake-png", "image/png")},
+        data={"workspace_id": workspace["id"]},
+    )
+    assert response.status_code == 415
+
+    response = client.post(
+        "/api/v1/media/upload",
+        files={"file": ("frame.html", b"\x89PNG\r\n\x1a\nexample", "image/png")},
         data={
             "workspace_id": workspace["id"],
             "kind": "camera_frame",
@@ -204,6 +211,7 @@ def test_upload_requires_workspace_and_validates_content_type(
     assert response.json()["workspace_id"] == workspace["id"]
     assert response.json()["kind"] == "camera_frame"
     assert response.json()["url"].startswith("/uploads/")
+    assert response.json()["url"].endswith(".png")
 
 
 def test_geocoding_requires_configuration(client: TestClient) -> None:
