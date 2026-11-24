@@ -1,0 +1,90 @@
+from datetime import datetime
+from pathlib import Path
+from typing import Annotated
+from uuid import UUID, uuid4
+
+from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile, status
+from sqlalchemy import select
+
+from app.api.deps import DbSession
+from app.api.utils import apply_patch, commit, get_or_404
+from app.core.config import get_settings
+from app.models.media import Media
+from app.schemas.media import MediaCreate, MediaRead, MediaType, MediaUpdate
+
+
+router = APIRouter(prefix="/media", tags=["media"])
+settings = get_settings()
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+@router.get("", response_model=list[MediaRead])
+def list_media(
+    db: DbSession,
+    media_type: MediaType | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[Media]:
+    query = select(Media).order_by(Media.created_at.desc()).offset(offset).limit(limit)
+    if media_type:
+        query = query.where(Media.media_type == media_type.value)
+    return list(db.scalars(query))
+
+
+@router.post("", response_model=MediaRead, status_code=status.HTTP_201_CREATED)
+def create_media(payload: MediaCreate, db: DbSession) -> Media:
+    return commit(db, Media(**payload.model_dump()))
+
+
+@router.post("/upload", response_model=MediaRead, status_code=status.HTTP_201_CREATED)
+async def upload_image(
+    db: DbSession,
+    file: Annotated[UploadFile, File()],
+    captured_at: Annotated[datetime | None, Form()] = None,
+    latitude: Annotated[float | None, Form(ge=-90, le=90)] = None,
+    longitude: Annotated[float | None, Form(ge=-180, le=180)] = None,
+    source: Annotated[str | None, Form(max_length=128)] = None,
+) -> Media:
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=415, detail="Only JPEG, PNG and WebP images are supported")
+
+    content = await file.read(settings.max_upload_size_mb * 1024 * 1024 + 1)
+    if len(content) > settings.max_upload_size_mb * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File is too large")
+
+    suffix = Path(file.filename or "upload").suffix.lower()
+    filename = f"{uuid4()}{suffix}"
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    destination = settings.upload_dir / filename
+    destination.write_bytes(content)
+
+    media = Media(
+        media_type=MediaType.IMAGE.value,
+        url=f"/uploads/{filename}",
+        original_filename=file.filename,
+        content_type=file.content_type,
+        captured_at=captured_at,
+        latitude=latitude,
+        longitude=longitude,
+        source=source,
+    )
+    return commit(db, media)
+
+
+@router.get("/{media_id}", response_model=MediaRead)
+def get_media(media_id: UUID, db: DbSession) -> Media:
+    return get_or_404(db, Media, media_id)
+
+
+@router.patch("/{media_id}", response_model=MediaRead)
+def update_media(media_id: UUID, payload: MediaUpdate, db: DbSession) -> Media:
+    media = get_or_404(db, Media, media_id)
+    return commit(db, apply_patch(media, payload))
+
+
+@router.delete("/{media_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_media(media_id: UUID, db: DbSession) -> Response:
+    media = get_or_404(db, Media, media_id)
+    db.delete(media)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,0 +1,41 @@
+services:
+  backend:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://mgts:mgts@postgres:5432/mgts
+      TRITON_URL: http://triton:8000
+      UPLOAD_DIR: /app/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mgts-net
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: mgts
+      POSTGRES_USER: mgts
+      POSTGRES_PASSWORD: mgts
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mgts -d mgts"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - mgts-net
+
+networks:
+  mgts-net:
+
+volumes:
+  postgres-data:
+  uploads:
