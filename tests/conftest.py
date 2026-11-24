@@ -2,6 +2,7 @@ import os
 
 os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 os.environ["UPLOAD_DIR"] = "test-uploads"
+os.environ["DGIS_API_KEY"] = ""
 
 import pytest
 from fastapi.testclient import TestClient

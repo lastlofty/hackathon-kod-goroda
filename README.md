@@ -142,6 +142,48 @@ Content-Type: application/json
 
 Так worker можно заменить с Triton на обычный FastAPI-сервис, очередь Celery, скрипт или внешний API без изменения предметной схемы.
 
+## Интеграция с 2ГИС
+
+Backend подключён к официальному Geocoder API 2ГИС через отдельный adapter `app/integrations/dgis.py`. Ключ и параметры соединения читаются из переменных окружения:
+
+```env
+DGIS_API_KEY=<API key>
+DGIS_BASE_URL=https://catalog.api.2gis.com
+DGIS_LOCALE=ru_RU
+DGIS_TIMEOUT_SECONDS=30
+```
+
+Доступны два маршрута:
+
+| Операция | Маршрут | Основные параметры |
+|---|---|---|
+| Адрес → координаты | `GET /api/v1/geocoding/search` | `q`, `page_size`, `region_id` |
+| Координаты → адрес | `GET /api/v1/geocoding/reverse` | `lat`, `lon`, `radius`, `type`, `page_size` |
+
+Прямое геокодирование:
+
+```http
+GET /api/v1/geocoding/search?q=Москва,%20Авиамоторная%20улица,%208с39&page_size=5
+```
+
+Обратное геокодирование с поиском ближайшего здания в радиусе 100 метров:
+
+```http
+GET /api/v1/geocoding/reverse?lat=55.75&lon=37.61&radius=100&type=building
+```
+
+Ответ backend имеет стабильную оболочку, а элементы остаются в формате провайдера:
+
+```json
+{
+  "provider": "2gis",
+  "total": 1,
+  "items": []
+}
+```
+
+Backend ограничивает `radius` диапазоном 0–2000 метров, как требует Geocoder API для обратного поиска без текстового запроса. Таймаут, сетевые ошибки и ошибки ключа не раскрывают значение ключа клиенту.
+
 ## Структура проекта
 
 ```text
@@ -149,6 +191,7 @@ app/
   api/         # HTTP-маршруты и сериализация ответов
   core/        # настройки приложения
   db/          # engine, Session и SQLAlchemy Base
+  integrations/ # клиенты 2ГИС и будущих внешних сервисов
   models/      # таблицы и связи
   schemas/     # входные и выходные Pydantic-контракты
   services/    # проверка ссылок и JSON Schema

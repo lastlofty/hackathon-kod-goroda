@@ -1,5 +1,8 @@
 from fastapi.testclient import TestClient
 
+from app.api.geocoding import get_dgis_client
+from app.main import app
+
 
 def create_workspace(client: TestClient, slug: str = "demo-case") -> dict:
     response = client.post(
@@ -201,3 +204,69 @@ def test_upload_requires_workspace_and_validates_content_type(
     assert response.json()["workspace_id"] == workspace["id"]
     assert response.json()["kind"] == "camera_frame"
     assert response.json()["url"].startswith("/uploads/")
+
+
+def test_geocoding_requires_configuration(client: TestClient) -> None:
+    response = client.get("/api/v1/geocoding/search", params={"q": "Москва"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "2GIS API key is not configured"
+
+
+def test_geocoding_routes_proxy_provider_without_exposing_key(
+    client: TestClient,
+) -> None:
+    class FakeDgisClient:
+        async def search(
+            self, query: str, page_size: int, region_id: int | None
+        ) -> dict:
+            assert query == "Москва, Авиамоторная улица, 8с39"
+            assert page_size == 3
+            assert region_id is None
+            return {
+                "provider": "2gis",
+                "total": 1,
+                "items": [{"id": "1", "name": "Авиамоторная улица, 8с39"}],
+            }
+
+        async def reverse(
+            self,
+            latitude: float,
+            longitude: float,
+            radius: int,
+            object_type: str | None,
+            page_size: int,
+        ) -> dict:
+            assert latitude == 55.75
+            assert longitude == 37.61
+            assert radius == 100
+            assert object_type == "building"
+            assert page_size == 10
+            return {
+                "provider": "2gis",
+                "total": 1,
+                "items": [{"id": "2", "address_name": "Тестовый адрес"}],
+            }
+
+    app.dependency_overrides[get_dgis_client] = FakeDgisClient
+    try:
+        response = client.get(
+            "/api/v1/geocoding/search",
+            params={"q": "Москва, Авиамоторная улица, 8с39", "page_size": 3},
+        )
+        assert response.status_code == 200
+        assert response.json()["provider"] == "2gis"
+        assert response.json()["total"] == 1
+
+        response = client.get(
+            "/api/v1/geocoding/reverse",
+            params={
+                "lat": 55.75,
+                "lon": 37.61,
+                "radius": 100,
+                "type": "building",
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["items"][0]["address_name"] == "Тестовый адрес"
+    finally:
+        app.dependency_overrides.pop(get_dgis_client, None)
