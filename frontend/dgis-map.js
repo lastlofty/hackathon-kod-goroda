@@ -204,9 +204,7 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
       graphicsPreset: 'normal',
       enableTrackResize: true,
       zoomControl: false,
-      floorControl: false,
-      disableRotationByUserInteraction: true,
-      disablePitchByUserInteraction: true
+      floorControl: false
     });
     await waitForDgisTiles(map);
     fitPoints(focus, 0);
@@ -252,16 +250,18 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
       map.setRotation(cameraRotation, {duration: 0});
       carIcon.style.rotate = (heading + cameraRotation) + 'deg';
     },
-    endDrive() {
+    endDrive({keepCamera = false} = {}) {
       driveGestures.abort();
       map.unblockInteraction();
       vehicle?.destroy();
       vehicle = null;
       carIcon = null;
-      map.setPitch(overview.pitch, {duration: 0});
-      map.setRotation(overview.rotation, {duration: 0});
-      map.setZoom(overview.zoom, {duration: 0});
-      map.setCenter(overview.center, {duration: 0});
+      if (!keepCamera) {
+        map.setPitch(overview.pitch, {duration: 0});
+        map.setRotation(overview.rotation, {duration: 0});
+        map.setZoom(overview.zoom, {duration: 0});
+        map.setCenter(overview.center, {duration: 0});
+      }
       overview = null;
     },
     panTo: point => map.setCenter(point, {duration: 250}),

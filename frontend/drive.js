@@ -57,13 +57,19 @@ function createDrivePlayer(map, route, onEnter) {
     toggle.textContent = 'Проезд 3D';
   }
 
+  function finish() {
+    pause();
+    map.endDrive({keepCamera: true});
+    inDrive = false;
+  }
+
   function tick(time) {
     const deltaMs = last ? Math.min(100, time - last) : 0;
     last = time;
     elapsed = Math.min(playTime, elapsed + deltaMs);
     render(deltaMs);
     if (elapsed < playTime) frame = requestAnimationFrame(tick);
-    else pause();
+    else finish();
   }
 
   function start() {
@@ -92,6 +98,7 @@ function createDrivePlayer(map, route, onEnter) {
     elapsed = Number(progress.value) / 1000 * playTime;
     enter();
     render();
+    if (elapsed === playTime) finish();
   };
 
   return {
