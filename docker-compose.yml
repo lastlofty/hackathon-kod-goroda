@@ -3,16 +3,26 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql+psycopg://app:app@postgres:5432/app
-      TRITON_URL: http://triton:8000
+      TRITON_URL: ${TRITON_URL:-http://triton:8000}
+      INFERENCE_MODE: ${INFERENCE_MODE:-disabled}
+      TRITON_MODEL_NAME: ${TRITON_MODEL_NAME:-detection}
+      TRITON_MODEL_VERSION: ${TRITON_MODEL_VERSION:-1}
+      TRITON_TIMEOUT_SECONDS: ${TRITON_TIMEOUT_SECONDS:-30}
       UPLOAD_DIR: /app/uploads
       DGIS_API_KEY: ${DGIS_API_KEY:-}
       DGIS_BASE_URL: ${DGIS_BASE_URL:-https://catalog.api.2gis.com}
       DGIS_LOCALE: ${DGIS_LOCALE:-ru_RU}
       DGIS_TIMEOUT_SECONDS: ${DGIS_TIMEOUT_SECONDS:-30}
     ports:
-      - "8080:8080"
+      - "${BACKEND_BIND:-127.0.0.1}:8080:8080"
     volumes:
       - uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -26,7 +36,7 @@ services:
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

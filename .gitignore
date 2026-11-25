@@ -10,3 +10,21 @@ uploads/*
 !uploads/.gitkeep
 test-uploads/
 tmp/
+
+# Model artifacts (deliver separately)
+.env.*
+!.env.example
+*.onnx
+*.onnx.data
+*.pt
+*.pth
+*.engine
+*.plan
+*.safetensors
+*.ckpt
+triton/model_repository/**/model.onnx*
+# Keep model repo structure/config, not weight data of any extension.
+triton/model_repository/**
+!triton/model_repository/**/
+!triton/model_repository/**/.gitkeep
+!triton/model_repository/**/config.pbtxt
