@@ -13,7 +13,7 @@ registry credentials, GitHub Advanced Security or deployment secrets.
 | Trivy | Freshly built Backend image (OS and application packages) | Report vulnerabilities; scanner errors fail |
 | CycloneDX | Backend image software inventory (SBOM) | Artifact |
 
-Python and image jobs wait for secret scanning. The secret scanner runs a
+Python and image jobs run independently of secret scanning. The secret scanner runs a
 synthetic positive test, redacts logs and does not upload secret reports. It scans
 Git refs fetched by checkout; it cannot see untracked local files, other repos or
 unfetched refs. Rotate/revoke any real leaked credential; removing the file alone

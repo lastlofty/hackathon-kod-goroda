@@ -50,7 +50,6 @@ jobs:
 
   python-audit:
     name: Python code and dependency audit (report)
-    needs: secrets
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -92,7 +91,6 @@ jobs:
 
   container-audit:
     name: Backend image scan and SBOM (report)
-    needs: secrets
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
