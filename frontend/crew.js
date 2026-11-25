@@ -283,7 +283,7 @@ async function annotatedCrewPhoto(frame) {
     if (verdict?.decision === 'rejected') continue;
     const x=box.x*canvas.width, y=box.y*canvas.height;
     ctx.strokeStyle = '#64bfff';
-    ctx.strokeRect(x,y,box.w*canvas.width,box.h*canvas.height);
+    strokeAnnotation(ctx,box,canvas.width,canvas.height);
     const label = checkedLabel(frame,box);
     const w = Math.min(canvas.width,ctx.measureText(label).width+10);
     const left = Math.min(x,canvas.width-w), top = Math.max(0,y-size-8);

@@ -41,7 +41,7 @@ function changePointFilter(value) {
 }
 
 function cropHTML(frame, box) {
-  return `<survey-crop role="img" aria-label="${escapeHTML(box.label || 'Фрагмент снимка')}" data-src="${escapeHTML(frame.src)}" data-rect="${[box.x,box.y,box.w,box.h].map(Number).join(',')}"></survey-crop>`;
+  return `<survey-crop role="img" aria-label="${escapeHTML(box.label || 'Фрагмент снимка')}" data-src="${escapeHTML(frame.src)}" data-path="${isPathType(box.type) ? escapeHTML(JSON.stringify({type:box.type,points:box.points})) : ''}" data-rect="${[box.x,box.y,box.w,box.h].map(Number).join(',')}"></survey-crop>`;
 }
 
 // Draw in source pixels so the box stays registered on portrait and landscape photos.
@@ -64,7 +64,8 @@ customElements.define('survey-crop', class extends HTMLElement {
       ctx.scale(canvas.width/cw, canvas.height/ch);
       ctx.drawImage(image,left,top,cw,ch,0,0,cw,ch);
       ctx.lineWidth = 2/scale; ctx.strokeStyle = '#69bdff';
-      ctx.strokeRect(x*width-left,y*height-top,w*width,h*height);
+      ctx.translate(-left,-top);
+      strokeAnnotation(ctx,this.dataset.path ? JSON.parse(this.dataset.path) : {x,y,w,h},width,height);
       this.replaceChildren(canvas);
     };
     image.onerror = () => { this.textContent = 'Снимок недоступен'; };

@@ -54,6 +54,10 @@ function boxHTML(box, selected = false, editable = false, frameId) {
   const handles = editable && selected ? ['nw','ne','sw','se'].map(corner => `<i class="box-handle" data-corner="${corner}"></i>`).join('') : '';
   const tag = frameId ? 'button' : 'div';
   const action = frameId ? `type="button" data-focus-frame="${escapeHTML(frameId)}" aria-label="Увеличить рамку: ${escapeHTML(box.label)}"` : '';
+  if (isPathType(box.type)) {
+    const label = frame ? checkedLabel(frame,box) : box.label;
+    return `<${tag} ${action} class="path-shape ${selected ? 'selected' : ''} ${verdict?.decision === 'rejected' ? 'rejected-path' : ''}" data-box-id="${escapeHTML(box.id)}">${pathLayer(box.type,box.points,editable && selected)}<span class="path-label" style="left:${100*box.x}%;top:${100*box.y}%">${escapeHTML(label)}</span></${tag}>`;
+  }
   return `<${tag} ${action} class="${classes}" data-box-id="${escapeHTML(box.id)}" style="--x:${box.x};--y:${box.y};--w:${box.w};--h:${box.h}"><span class="tag">${escapeHTML(frame ? checkedLabel(frame,box) : box.label)}</span>${handles}</${tag}>`;
 }
 
@@ -166,7 +170,7 @@ function renderSelection() {
   const focused = frame?.boxes.find(item => item.id === state.focusBox);
   const figure = frame ? `<div class="frame-panel">
     <figure class="frame">${focused ? cropHTML(frame, focused) : `<div class="frame-bounds"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</div>`}</figure>
-    <div class="frame-tools">${focused ? '<button class="button" data-action="full-frame">Весь кадр</button>' : `<div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div>`}<button class="button" title="Править рамки (E)" aria-keyshortcuts="E" data-frame="${escapeHTML(frame.id)}">Править рамки ↗</button></div>
+    <div class="frame-tools">${focused ? '<button class="button" data-action="full-frame">Весь кадр</button>' : `<div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div>`}<button class="button" title="Править рамки (E)" aria-keyshortcuts="E" data-frame="${escapeHTML(frame.id)}">Править разметку ↗</button></div>
     ${focused ? boxReviewControls(frame,focused) : ''}
   </div>` : '<p class="empty">К этому объекту кадр не привязан.</p>';
   $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span><button class="table-link compare-link" data-action="compare">До / после</button>${status(record)}</div><h2>${escapeHTML(recordLabel(record))}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
@@ -516,7 +520,20 @@ function deletePoint() {
   persist('Точка удалена в этом браузере.');
 }
 
-const editor = {frame: null, boxes: [], selected: null, mode: 'draw', drag: null};
+const editor = {frame: null, boxes: [], selected: null, mode: 'draw', drag: null, vertices: [], traceRequest: 0, tracing: false};
+
+function resetImageTrace() {
+  editor.traceRequest++;
+  editor.tracing = false;
+}
+
+function startGeometry(mode) {
+  resetImageTrace();
+  editor.selected = null;
+  editor.vertices = [];
+  editor.mode = mode;
+  renderEditor();
+}
 
 function openEditor(id, preferredBox) {
   const frame = frameById(id);
@@ -550,6 +567,8 @@ function editorBoxRow(box) {
 }
 
 function selectEditorBox(id) {
+  resetImageTrace();
+  editor.vertices = [];
   const box = editor.boxes.find(item => item.id === id) || editor.boxes[0];
   editor.selected = box?.id ?? null;
   editor.mode = box ? 'edit' : 'draw';
@@ -559,22 +578,82 @@ function selectEditorBox(id) {
   type.value = box.label;
 }
 
+function useImageTrace() {
+  return isPathType(editor.mode) && $('trace-image').checked;
+}
+
+async function traceSelection(type, start, end, existing) {
+  const request = ++editor.traceRequest;
+  const label = existing?.label || $('box-type').value;
+  const current = () => request === editor.traceRequest && $('annotator').open;
+  editor.tracing = true;
+  renderEditor();
+  $('editor-hint').textContent = 'Подбираем границу по снимку…';
+  try {
+    let image = $('edit-photo');
+    if (new URL(image.src).origin !== location.origin && /^https?:/.test(image.src)) {
+      const readable = new Image();
+      readable.crossOrigin = 'anonymous';
+      readable.src = image.src;
+      image = readable;
+    }
+    await image.decode();
+    if (!current()) return;
+    const points = fitImagePath(image,type,start,end);
+    if (!points) {
+      editor.vertices = [];
+      editor.tracing = false;
+      renderEditor();
+      $('editor-hint').textContent = 'Чёткой границы не найдено. Выберите область точнее или снимите «По изображению» для ручной разметки.';
+      return;
+    }
+    const shape = {id:existing?.id ?? newId(),label,type,points,...pathBounds(points),source:'manual'};
+    editor.boxes = existing ? editor.boxes.map(box => box.id === existing.id ? shape : box) : [...editor.boxes,shape];
+    selectEditorBox(shape.id);
+    renderEditor();
+    $('editor-hint').textContent = 'Проверьте результат. Вершины можно передвинуть перед сохранением.';
+  } catch {
+    if (!current()) return;
+    editor.vertices = [];
+    editor.tracing = false;
+    renderEditor();
+    $('editor-hint').textContent = 'Не удалось прочитать пиксели снимка. Откройте локальное фото или снимите «По изображению» для ручной разметки.';
+  } finally {
+    if (current()) editor.tracing = false;
+  }
+}
+
+$('trace-image').onchange = () => startGeometry(editor.mode);
+
 function paintEditorBoxes(boxes) {
   $('edit-boxes').innerHTML = boxes.map(box => boxHTML(box, box.id === editor.selected, editor.mode === 'edit')).join('');
+  if (editor.vertices.length) $('edit-boxes').insertAdjacentHTML('beforeend','<div class="path-shape draft">' + pathLayer(editor.mode,editor.vertices,true) + '</div>');
 }
 
 function renderEditor() {
   const selected = editor.boxes.find(box => box.id === editor.selected);
   $('editor-image').dataset.mode = editor.mode;
   $('editor-hint').textContent = {
-    edit: 'Потяните рамку, чтобы переместить её, или угол, чтобы изменить размер.',
+    polyline: useImageTrace() ? (editor.vertices.length ? 'Теперь укажите конец линии.' : 'Укажите начало и конец линии на объекте.') : 'Нажимайте на снимок вдоль линии, затем нажмите «Завершить».',
+    polygon: useImageTrace() ? 'Протяните рамку вокруг объекта с небольшим запасом.' : 'Отметьте вершины по периметру и нажмите «Завершить».',
+    edit: isPathType(selected?.type) ? 'Потяните вершину для правки или саму фигуру для перемещения.' : 'Потяните рамку, чтобы переместить её, или угол, чтобы изменить размер.',
     draw: 'Протяните от одного угла новой рамки до противоположного.',
     redraw: 'Протяните новую границу для выбранной рамки.'
   }[editor.mode];
   paintEditorBoxes(editor.boxes);
   $('boxes-list').innerHTML = editor.boxes.length ? editor.boxes.map(editorBoxRow).join('') : '<p class="subtle">Пока нет рамок.</p>';
   document.querySelector('[data-action="delete-box"]').disabled = !selected;
-  document.querySelector('[data-action="redraw"]').disabled = !selected;
+  document.querySelector('[data-action="redraw"]').disabled = !selected || isPathType(selected.type);
+  for (const type of ['polyline','polygon']) document.querySelector('[data-action="'+type+'"]').setAttribute('aria-pressed',String(editor.mode === type));
+  const finish = document.querySelector('[data-action="finish-path"]');
+  $('trace-choice').hidden = !isPathType(editor.mode);
+  document.querySelector('[data-action="trace-box"]').hidden = !selected || isPathType(selected.type) || editor.mode !== 'edit';
+  finish.hidden = !isPathType(editor.mode) || useImageTrace();
+  finish.disabled = !validPath(editor.mode,editor.vertices);
+  const undo = document.querySelector('[data-action="undo-vertex"]');
+  undo.hidden = !isPathType(editor.mode) || (useImageTrace() && !editor.vertices.length);
+  undo.disabled = !editor.vertices.length;
+  for (const action of ['save-boxes','box-json']) document.querySelector('[data-action="'+action+'"]').disabled = editor.tracing || Boolean(editor.vertices.length);
   document.querySelector('[data-action="redraw"]').setAttribute('aria-pressed', editor.mode === 'redraw');
   document.querySelector('[data-action="draw"]').setAttribute('aria-pressed', editor.mode === 'draw');
 }
@@ -592,6 +671,22 @@ function rectangle(start,end) {
 const canvas = $('editor-image');
 canvas.addEventListener('pointerdown', event => {
   if (event.button !== 0 || !event.isPrimary || editor.drag || !$('edit-photo').naturalWidth) return;
+  if (editor.tracing) return;
+  if (useImageTrace() && editor.mode === 'polygon') {
+    canvas.setPointerCapture(event.pointerId);
+    editor.drag = {id:event.pointerId,start:photoPoint(event),mode:'trace-area'};
+    return;
+  }
+  if (isPathType(editor.mode)) {
+    const point = photoPoint(event);
+    if (useImageTrace() && editor.vertices.length) {
+      traceSelection('polyline',editor.vertices[0],point);
+      return;
+    }
+    if (point.join(',') !== editor.vertices.at(-1)?.join(',')) editor.vertices.push(point);
+    renderEditor();
+    return;
+  }
   const element = event.target.closest('[data-box-id]');
   const targetId = editor.mode === 'edit' ? element?.dataset.boxId : editor.selected;
   const original = editor.boxes.find(box => box.id === targetId);
@@ -602,7 +697,7 @@ canvas.addEventListener('pointerdown', event => {
     renderEditor();
   }
   canvas.setPointerCapture(event.pointerId);
-  editor.drag = {id:event.pointerId, start:photoPoint(event), original, corner, mode:editor.mode, newId:original?.id ?? newId()};
+  editor.drag = {id:event.pointerId, start:photoPoint(event), original, corner, vertex:event.target.dataset.vertex, mode:editor.mode, newId:original?.id ?? newId()};
 });
 
 function dragBounds(drag, [x, y]) {
@@ -623,12 +718,17 @@ function dragBounds(drag, [x, y]) {
 }
 
 function draggedBoxes(drag, point) {
-  const bounds = dragBounds(drag, point);
+  const bounds = isPathType(drag.original?.type) ? movePath(drag,point) : dragBounds(drag, point);
   const box = {...drag.original, id:drag.newId, label:$('box-type').value, ...bounds, source:'manual'};
   return drag.original ? editor.boxes.map(item => item.id === box.id ? box : item) : [...editor.boxes, box];
 }
 
 canvas.addEventListener('pointermove', event => {
+  if (editor.drag?.id === event.pointerId && editor.drag.mode === 'trace-area') {
+    const bounds = rectangle(editor.drag.start,photoPoint(event));
+    paintEditorBoxes([...editor.boxes,{...bounds,id:'trace-area',label:'Область поиска'}]);
+    return;
+  }
   if (editor.drag?.id === event.pointerId) paintEditorBoxes(draggedBoxes(editor.drag, photoPoint(event)));
 });
 canvas.addEventListener('pointerup', event => {
@@ -636,6 +736,11 @@ canvas.addEventListener('pointerup', event => {
   if (drag?.id !== event.pointerId) return;
   editor.drag = null;
   const point = photoPoint(event);
+  if (drag.mode === 'trace-area') {
+    paintEditorBoxes(editor.boxes);
+    traceSelection('polygon',drag.start,point);
+    return;
+  }
   const bounds = rectangle(drag.start, point);
   const changed = drag.mode === 'edit' ? bounds.w + bounds.h > .00001 : bounds.w >= .008 && bounds.h >= .008;
   if (changed) {
@@ -681,12 +786,20 @@ function validatedBoxes(text) {
     const id = box.id ?? newId();
     if (typeof id !== 'string' || !id.trim() || ids.has(id)) throw new Error(row + 'Нужен уникальный текстовый id.');
     ids.add(id);
+    if (isPathType(box.type)) {
+      if (!validPath(box.type,box.points)) throw new Error(row + 'Проверьте вершины. Линии нужны две разные точки, контуру — три точки вне одной прямой.');
+      const old = previous.get(id);
+      const label = box.label.trim();
+      if (old?.type === box.type && old.label === label && JSON.stringify(old.points) === JSON.stringify(box.points)) return old;
+      return {id,label,type:box.type,points:box.points,...pathBounds(box.points),source:'manual'};
+    }
+    if (box.type && box.type !== 'bbox') throw new Error(row + 'Неизвестный тип фигуры.');
     const {x, y, w, h} = box;
     if (![x,y,w,h].every(Number.isFinite) || x < 0 || y < 0 || w <= 0 || h <= 0 ||
         x + w > 1 + 1e-10 || y + h > 1 + 1e-10) throw new Error(row + 'Прямоугольник должен целиком помещаться в снимке.');
     const label = box.label.trim();
     const old = previous.get(id);
-    const unchanged = old && old.label === label && old.x === x && old.y === y && old.w === w && old.h === h;
+    const unchanged = old && !isPathType(old.type) && old.label === label && old.x === x && old.y === y && old.w === w && old.h === h;
     return unchanged ? old : {id, label, x, y, w, h, source: 'manual'};
   });
 }
@@ -752,10 +865,12 @@ function saveBoxes() {
   renderDeck();
   if (state.view === 'map') renderSelection();
   else renderList();
-  persist('Рамки сохранены в этом браузере.');
+  persist('Разметка сохранена в этом браузере.');
 }
 
 function saveBeforeNavigation() {
+  if (editor.tracing) return false;
+  if (editor.vertices.length) { $('editor-hint').textContent = 'Завершите фигуру или уберите вершины перед переходом.'; return false; }
   if (JSON.stringify(editor.boxes) === JSON.stringify(editor.frame.boxes)) return true;
   if (!window.confirm('Сохранить изменения рамок и перейти дальше? При отмене вы останетесь в редакторе.')) return false;
   saveBoxes();
@@ -855,7 +970,8 @@ const actions = {
   'share-record': copyRecordLink, note: openReviewNote, 'close-note': () => $('review-note').close(),
   queue: () => { queueOnly = !queueOnly; renderList(); },
   'route-report': reportRoute, 'close-report': () => $('report-dialog').close(),
-  'route-geojson': exportRouteGeoJSON, 'print-report': async () => {
+  'route-atlas': openRouteAtlas, 'close-atlas': () => $('atlas-dialog').close(),
+  'print-atlas': printRouteAtlas, 'route-geojson': exportRouteGeoJSON, 'print-report': async () => {
     const images = $('report-body').querySelectorAll('img, survey-crop');
     await Promise.allSettled([...images].map(image => image.ready || image.decode?.()));
     if ($('report-dialog').open) window.print();
@@ -875,7 +991,21 @@ const actions = {
   original: () => { state.overlay = false; renderSelection(); document.querySelector('[data-action="original"]')?.focus({preventScroll:true}); },
   overlay: () => { state.overlay = true; renderSelection(); document.querySelector('[data-action="overlay"]')?.focus({preventScroll:true}); },
   'close-editor': () => $('annotator').close(),
-  draw: () => { editor.selected = null; editor.mode = 'draw'; renderEditor(); },
+  draw: () => startGeometry('draw'),
+  polyline: () => startGeometry('polyline'),
+  polygon: () => startGeometry('polygon'),
+  'trace-box': () => {
+    const box = editor.boxes.find(b => b.id === editor.selected);
+    if (box && !isPathType(box.type) && !editor.tracing) traceSelection('polygon',[box.x,box.y],[box.x+box.w,box.y+box.h],box);
+  },
+  'undo-vertex': () => { resetImageTrace(); editor.vertices.pop(); renderEditor(); },
+  'finish-path': () => {
+    if (!validPath(editor.mode,editor.vertices)) return;
+    const id = newId();
+    editor.boxes.push({id,label:$('box-type').value,type:editor.mode,points:editor.vertices,...pathBounds(editor.vertices),source:'manual'});
+    selectEditorBox(id);
+    renderEditor();
+  },
   redraw: () => { editor.mode = 'redraw'; renderEditor(); },
   'delete-box': () => { editor.boxes = editor.boxes.filter(box => box.id !== editor.selected); selectEditorBox(); renderEditor(); },
   'save-boxes': () => { saveBoxes(); $('annotator').close(); },

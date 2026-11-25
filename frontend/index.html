@@ -8,17 +8,20 @@
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=c55053f22e2d">
+<link rel="stylesheet" href="./styles.css?v=48caaaf47256">
 <script defer src="./dgis-map.js?v=0859a0608e24"></script>
 <script defer src="./drive.js?v=308d7e01209c"></script>
 <script defer src="./backend-api.js?v=2a5666c42cfe"></script>
 <script defer src="./inspection-feed.js?v=446664ceadea"></script>
 <script defer src="./survey.js?v=db1e29ec3885"></script>
-<script defer src="./fieldwork.js?v=36ca6449f2da"></script>
+<script defer src="./fieldwork.js?v=c731c3244cd2"></script>
 <script defer src="./live-survey.js?v=2fd92c219ad3"></script>
 <script defer src="./vendor/fflate-0.8.2.js"></script>
-<script defer src="./crew.js?v=ddfa93ddbc54"></script>
-<script defer src="./app.js?v=07948719b92a"></script>
+<script defer src="./image-trace.js?v=a0b0a63a0c99"></script>
+<script defer src="./annotation-path.js?v=2ae6ed67ca47"></script>
+<script defer src="./route-atlas.js?v=ad36c35f094d"></script>
+<script defer src="./crew.js?v=448a25b70659"></script>
+<script defer src="./app.js?v=cab689a8bc89"></script>
 </head>
 <body>
 <header class="topbar">
@@ -110,23 +113,29 @@
     <button class="button icon" data-action="close-editor" aria-label="Закрыть разметку">×</button>
   </div>
   <div class="editor-tools">
-    <label>Класс <select id="box-type"><option>Кабельный колодец</option><option>Опора связи</option><option>Шкаф связи</option><option>Другое</option></select></label>
+    <label>Класс <select id="box-type"><option>Кабельный колодец</option><option>Опора связи</option><option>Шкаф связи</option><option>Кабель</option><option>Повреждение</option><option>Другое</option></select></label>
     <button class="button" data-action="draw" aria-pressed="true">Новая рамка</button>
+    <button class="button" data-action="polyline" aria-pressed="false">Линия</button>
+    <button class="button" data-action="polygon" aria-pressed="false">Контур</button>
+    <label id="trace-choice" hidden><input type="checkbox" id="trace-image" checked> По изображению</label>
+    <button class="button" data-action="trace-box" hidden>Обвести рамку</button>
+    <button class="button" data-action="undo-vertex" hidden>Убрать вершину</button>
+    <button class="button" data-action="finish-path" hidden>Завершить</button>
     <button class="button" data-action="redraw" aria-pressed="false">Перерисовать</button>
     <button class="button" data-action="delete-box">Удалить</button>
-    <button class="button" data-action="box-json">JSON рамок</button>
+    <button class="button" data-action="box-json">JSON разметки</button>
     <button class="button" id="inference-button" data-action="show-inference" hidden>Результат модели</button>
   </div>
   <div class="edit-body">
     <div class="edit-viewport"><div id="editor-image" class="editor-image"><img id="edit-photo" alt="Снимок для ручной разметки" draggable="false"><div id="edit-boxes"></div></div></div>
-    <aside id="boxes-list" class="boxes-list" aria-label="Рамки на кадре"></aside>
+    <aside id="boxes-list" class="boxes-list" aria-label="Разметка кадра"></aside>
   </div>
   <div class="dialog-foot"><span id="editor-hint" class="subtle" role="status">Потяни от одного угла рамки до противоположного.</span><button class="button primary" data-action="save-boxes">Сохранить</button></div>
 </dialog>
 <dialog id="box-json-dialog" aria-labelledby="box-json-title">
-  <div class="dialog-head"><h2 id="box-json-title">JSON рамок кадра</h2><button class="button icon" data-action="close-json" aria-label="Закрыть JSON">×</button></div>
+  <div class="dialog-head"><h2 id="box-json-title">JSON разметки кадра</h2><button class="button icon" data-action="close-json" aria-label="Закрыть JSON">×</button></div>
   <div class="json-editor">
-    <label for="box-json-text">Массив рамок · x, y, w, h в долях от размера снимка</label>
+    <label for="box-json-text">Координаты от 0 до 1. Для рамки — x, y, w, h. Для линии или контура — type (polyline или polygon) и points в виде пар [x, y].</label>
     <textarea id="box-json-text" spellcheck="false" rows="13"></textarea>
     <label>Открыть JSON <input id="box-json-file" type="file" accept=".json,application/json"></label>
     <p id="box-json-error" role="alert"></p>
@@ -161,7 +170,12 @@
     <p id="compare-message" role="status"></p>
   </div>
 </dialog>
-<dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-head"><h2 id="report-title">Отчёт по маршруту</h2><button class="button icon" data-action="close-report" aria-label="Закрыть">×</button></div><label class="report-filter"><input type="checkbox" id="problems-only"> Только проблемы</label><div id="report-body"></div><div class="dialog-foot"><button class="button" data-action="route-geojson">Скачать GeoJSON</button><button class="button primary" data-action="print-report">Печать / PDF</button></div></dialog>
+<dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-head"><h2 id="report-title">Отчёт по маршруту</h2><button class="button icon" data-action="close-report" aria-label="Закрыть">×</button></div><label class="report-filter"><input type="checkbox" id="problems-only"> Только проблемы</label><div id="report-body"></div><div class="dialog-foot"><button class="button" data-action="route-geojson">Скачать GeoJSON</button><button class="button" data-action="route-atlas">Печать маршрута</button><button class="button primary" data-action="print-report">Печать отчёта</button></div></dialog>
+<dialog id="atlas-dialog" aria-labelledby="atlas-title">
+  <div class="dialog-head"><h2 id="atlas-title">Атлас маршрута</h2><button class="button icon" data-action="close-atlas" aria-label="Закрыть атлас">×</button></div>
+  <div id="atlas-body"></div>
+  <div class="dialog-foot"><button class="button primary" data-action="print-atlas">Печать / PDF</button></div>
+</dialog>
 <dialog id="upload-dialog" aria-labelledby="upload-title">
   <form id="upload-form">
     <div class="dialog-head"><h2 id="upload-title">Добавить снимок</h2><button type="button" class="button icon" data-action="close-upload" aria-label="Закрыть загрузку">×</button></div>
