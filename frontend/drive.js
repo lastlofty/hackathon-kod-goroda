@@ -22,7 +22,7 @@ function createDrivePlayer(map, route, onEnter, onPosition) {
   const minutes = Math.floor(route.duration / 60);
   const seconds = String(route.duration % 60).padStart(2, '0');
   detail.textContent = `${new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 1}).format(route.distance / 1000)} км · ${minutes}:${seconds}`;
-  detail.title = 'Оценка времени в пути от 2ГИС';
+  detail.title = 'Расчётное время в пути';
   panel.hidden = false;
 
   function poseAt(distance) {
@@ -112,6 +112,7 @@ function createDrivePlayer(map, route, onEnter, onPosition) {
 
   return {
     pause,
+    position: () => inDrive ? poseAt(length * elapsed / playTime).point : null,
     exit() {
       pause();
       elapsed = 0;

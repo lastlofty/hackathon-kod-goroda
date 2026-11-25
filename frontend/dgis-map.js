@@ -1,13 +1,11 @@
 'use strict';
 
-const dgisLightStyle = 'c080bb6a-8134-4993-93a1-5b4d8c36a59b';
-// Group IDs in the standard light style. Street and house-number layers stay visible.
-const dgisPlaceLayers = [
-  '563870', '444318', '367319', '233125', '309294', '913433', // Businesses and landmarks
-  '5946', '661538', '826173', 'traffic light', 'porch', 'porch under house', 'gate', 'barrier',
-  '764094', '805874', '758882', // Transit lines, landmarks and stops
-  '711817', '366803', '272603', '682782', '740815', '159784', '632416', '43556', // Metro stations
-  '77098', '364776', '73948', '501891', '924721', '135503', '227', '44814' // Metro exits
+const dgisNightStyle = 'e05ac437-fcc2-4845-ad74-b1de9ce07555';
+// Address layers in the 2GIS night style. The house-number group also contains
+// building names, so restore its address layers individually.
+const dgisAddressLayers = [
+  '414608', // Street labels
+  '615525', '832861', '717409', '985757', '600950', '701700' // House numbers
 ];
 
 async function loadDgisDrivingRoute(key, stops) {
@@ -46,7 +44,7 @@ async function loadDgisDrivingRoute(key, stops) {
       }
     }
   }
-  if (data.status !== 'OK' || points.length < 2) throw new Error('2ГИС не вернул геометрию маршрута');
+  if (data.status !== 'OK' || points.length < 2) throw new Error('Нет геометрии маршрута');
   return {points, distance: route.total_distance, duration: route.total_duration};
 }
 
@@ -98,8 +96,11 @@ function waitForDgisTiles(map) {
     };
     function styleLoad() {
       try {
-        for (const id of dgisPlaceLayers) {
-          if (map.hasLayer(id)) map.hideLayers({id});
+        for (const type of ['point', 'labelLine', 'metricPoint', 'oneWayLine']) {
+          map.hideLayers({type});
+        }
+        for (const id of dgisAddressLayers) {
+          if (map.hasLayer(id)) map.showLayers({id});
         }
         styleLoaded = true;
       } catch {
@@ -130,7 +131,7 @@ function drawRouteLine(map, route) {
   const svg = document.createElementNS(ns, 'svg');
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden';
   svg.setAttribute('aria-hidden', 'true');
-  const lines = ['#ffffff', '#1967a5', 'transparent'].map((color, i) => {
+  const lines = ['#18232e', 'var(--brand)', 'transparent'].map((color, i) => {
     const path = document.createElementNS(ns, 'path');
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', color);
@@ -181,7 +182,7 @@ function drawRouteLine(map, route) {
     contains: point => lines[2].isPointInStroke(new DOMPoint(point[0], point[1])),
     style(active, hovered, driving) {
       svg.style.visibility = driving && !active ? 'hidden' : 'visible';
-      lines[1].setAttribute('stroke', hovered ? '#007d81' : active ? '#1967a5' : '#697788');
+      lines[1].setAttribute('stroke', hovered ? '#82deea' : active ? 'var(--brand)' : '#97aabd');
       lines[1].setAttribute('stroke-width', hovered ? 7 : active ? 5 : 4);
     }
   };
@@ -197,7 +198,6 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
   let carIcon;
   let driveGestures;
   const lines = new Map();
-  const endpoints = [];
   let selected = choices[0];
   let hovered;
   let targetZoom;
@@ -224,7 +224,6 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
     selected = choice;
     hover(undefined);
     styleRoutes();
-    endpoints.forEach((marker, i) => marker.setCoordinates(i ? choice.points.at(-1) : choice.points[0]));
   }
 
   function setDriveZoom(value, duration) {
@@ -287,7 +286,8 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
   try {
     map = new api.Map(container, {
       key,
-      style: dgisLightStyle,
+      style: dgisNightStyle,
+      defaultBackgroundColor: '#17212c',
       center,
       zoom: focus.length ? 15 : 1,
       maxZoom: 19,
@@ -311,14 +311,6 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
       if (choice) onRouteSelect(choice);
       else if (event.lngLat) onPoint(event.lngLat);
     });
-    if (selected) {
-      for (const [text, coordinates] of [['Старт', selected.points[0]], ['Финиш', selected.points.at(-1)]]) {
-        const label = document.createElement('span');
-        label.className = 'route-endpoint';
-        label.textContent = text;
-        endpoints.push(new api.HtmlMarker(map, {coordinates, html: label, anchor: [0, 20], interactive: false}));
-      }
-    }
   } catch (error) {
     map?.destroy();
     throw error instanceof DgisMapError ? error : new DgisMapError('render');

@@ -23,8 +23,8 @@ const displayId = record => record.displayId || record.id;
 const newId = () => crypto.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
 const priorityOf = record => Object.hasOwn(priorities, record.priority) ? record.priority : 'unverified';
 const status = record => `<span class="status ${priorityOf(record)}"><i class="dot"></i>${priorities[priorityOf(record)]}</span>`;
-const sourceLink = source => /^https?:\/\//.test(source?.url ?? '')
-  ? `<a href="${escapeHTML(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(source.label || 'Источник')}</a>` : '';
+const sourceLink = (source, label) => /^https?:\/\//.test(source?.url ?? '')
+  ? `<a href="${escapeHTML(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHTML(label)}</a>` : '';
 let noticeTimer;
 
 function announce(message) {
@@ -116,7 +116,7 @@ async function showPointAddress(record, field) {
     const address = await pointAddresses.get(key);
     field.textContent = address || 'Адрес для этой точки не найден';
   } catch {
-    field.textContent = 'Адрес недоступен. Проверьте подключение к геокодеру 2ГИС.';
+    field.textContent = 'Адрес недоступен. Проверьте подключение к службе поиска адресов.';
   }
 }
 
@@ -124,6 +124,17 @@ function renderSelection() {
   const visible = visibleObjects();
   const record = visible.find(item => item.id === state.selected) || visible[0];
   state.selected = record?.id;
+  for (const shot of $('route-frames').children) {
+    if (!shot.dataset.shot) continue;
+    const selected = shot.dataset.shot === record?.id;
+    shot.setAttribute('aria-pressed', String(selected));
+    if (selected) {
+      const rail = $('route-frames');
+      const offset = shot.getBoundingClientRect().left - rail.getBoundingClientRect().left;
+      if (offset < 0) rail.scrollLeft += offset;
+      else if (offset + shot.offsetWidth > rail.clientWidth) rail.scrollLeft += offset + shot.offsetWidth - rail.clientWidth;
+    }
+  }
   const index = visible.indexOf(record);
   $('position').textContent = record ? `${index + 1} / ${visible.length}` : '0 / 0';
   document.querySelectorAll('[data-action="prev"],[data-action="next"]').forEach(button => { button.disabled = visible.length < 2; });
@@ -135,24 +146,22 @@ function renderSelection() {
   const frame = frameById(record.frame);
   const box = frame?.boxes.find(item => item.id === record.box);
   const point = formatPoint(record.point);
-  const source = sourceLink(record.source);
+  const sources = [sourceLink(record.source, 'Источник координат'), sourceLink(frame?.source, 'Источник снимка')].filter(Boolean);
   const figure = frame ? `<div class="frame-panel">
-    <figure class="frame"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => item.source === 'manual' && item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</figure>
+    <figure class="frame"><div class="frame-bounds"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => item.source === 'manual' && item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</div></figure>
     <div class="frame-tools"><div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div><button class="button" data-frame="${escapeHTML(frame.id)}">Править рамки ↗</button></div>
   </div>` : '<p class="empty">К этому объекту кадр не привязан.</p>';
   $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span>${status(record)}</div><h2>${escapeHTML(record.type)}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
-    ${figure}<div class="record-data"><dl><div><dt>Признак</dt><dd>${escapeHTML(record.issue ?? 'Нет данных о состоянии')}</dd></div>
+    ${figure}${frame ? reviewControls(record) : ''}<div class="record-data"><dl><div><dt>Признак</dt><dd>${escapeHTML(record.issue ?? 'Нет данных о состоянии')}</dd></div>
     <div><dt>Уверенность модели</dt><dd>${!frame?.demo && Number.isFinite(record.confidence) ? record.confidence + '%' : '—'}</dd></div>
     <div><dt>Адрес точки</dt><dd id="point-address" aria-live="polite"></dd></div>
     <div><dt>${record.pointKind === 'asset' ? 'Координаты объекта' : record.pointKind === 'manual' ? 'Точка оператора' : 'Место наблюдения'}</dt><dd class="mono">${point}</dd></div>
-    ${source ? `<div><dt>Источник координат</dt><dd>${source}</dd></div>` : ''}
     ${record.recommendation ? `<div><dt>Рекомендация</dt><dd>${escapeHTML(record.recommendation)}</dd></div>` : ''}
     <div><dt>Съёмка</dt><dd>${escapeHTML(frame?.time || '—')}</dd></div></dl>
     ${frame?.note ? `<p class="subtle">${escapeHTML(frame.note)}</p>` : ''}
-    ${frame?.source ? `<p class="subtle">${sourceLink(frame.source)}</p>` : ''}
     <div class="point-tools"><button class="button" data-action="move-point">${isValidPoint(record.point) ? 'Переместить точку' : 'Поставить на карту'}</button>
     ${isValidPoint(record.point) ? '<button class="button" data-action="delete-point">Удалить точку</button>' : ''}</div>
-    ${frame ? `<p class="subtle mono">${escapeHTML(frame.name)}</p>` : ''}</div>`;
+    ${frame || sources.length ? `<div class="record-foot">${frame ? `<span class="mono">${escapeHTML(frame.name)}</span>` : ''}${sources.join(' ')} </div>` : ''}</div>`;
   showPointAddress(record, $('point-address'));
   renderMarkers();
 }
@@ -166,8 +175,9 @@ function renderTotals() {
 function renderList() {
   const exportButton = '<button class="table-link" data-action="export-json">Скачать JSON</button>';
   if (state.view === 'registry') {
-    const rows = records.objects.map(record => `<tr><td class="mono">${escapeHTML(displayId(record))}</td><td>${escapeHTML(record.type)}</td><td>${escapeHTML(record.issue ?? '—')}</td><td>${status(record)}</td><td>${escapeHTML(record.place || formatPoint(record.point))}</td><td><button class="table-link" data-record="${escapeHTML(record.id)}">${isValidPoint(record.point) ? 'На карте ↗' : 'Карточка ↗'}</button></td></tr>`).join('');
-    $('list-view').innerHTML = `<div class="table-shell"><table><thead><tr><th>ID</th><th>Объект</th><th>Признак</th><th>Статус</th><th>Место</th><th>Просмотр</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const listed = queueOnly ? records.objects.filter(needsFollowup).sort((a,b) => (a.confidence ?? 101) - (b.confidence ?? 101)) : records.objects;
+    const rows = listed.map(record => `<tr><td class="mono">${escapeHTML(displayId(record))}</td><td><span class="file-cell">${queueOnly && frameById(record.frame) ? `<img src="${escapeHTML(frameById(record.frame).src)}" alt="">` : ''}${escapeHTML(record.type)}</span></td><td>${escapeHTML(record.issue ?? '—')}</td><td>${status(record)}</td><td>${escapeHTML(record.inspectionReview?.note || reviewNames[record.inspectionReview?.decision] || '—')}</td><td>${escapeHTML(record.place || formatPoint(record.point))}</td><td><button class="table-link" data-record="${escapeHTML(record.id)}">${isValidPoint(record.point) ? 'На карте ↗' : 'Карточка ↗'}</button></td></tr>`).join('');
+    $('list-view').innerHTML = `<div class="queue-tools"><button class="button" data-action="queue" aria-pressed="${queueOnly}">Требуют проверки · ${records.objects.filter(needsFollowup).length}</button></div><div class="table-shell"><table><thead><tr><th>ID</th><th>Объект</th><th>Признак</th><th>Статус</th><th>Проверка кадра</th><th>Место</th><th>Просмотр</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Очередь пуста.</td></tr>'}</tbody></table></div>`;
     return;
   }
   const rows = records.frames.map(frame => `<tr><td><span class="file-cell"><img src="${escapeHTML(frame.src)}" alt="">${escapeHTML(frame.name)}</span></td><td class="mono">${escapeHTML(frame.time)}</td><td>${frame.boxes.length}</td><td>${records.objects.filter(record => record.frame === frame.id).length}</td><td><button class="table-link" data-frame="${escapeHTML(frame.id)}">Открыть кадр ↗</button></td><td><button class="table-link" data-place="${escapeHTML(frame.id)}">Поставить точку</button></td></tr>`).join('');
@@ -181,7 +191,8 @@ function switchView(view) {
   $('list-view').hidden = view === 'map';
   const pageTitle = $('page-title');
   pageTitle.textContent = {registry: 'Реестр объектов', history: 'История снимков'}[view] ?? '';
-  pageTitle.hidden = view === 'map';
+  pageTitle.parentElement.hidden = view === 'map';
+  $('route-report').hidden = !currentSurveyRoute() || view !== 'map';
   document.querySelectorAll('[data-view]').forEach(button => button.setAttribute('aria-pressed', button.dataset.view === view));
   if (view === 'map') {
     renderSelection();
@@ -201,12 +212,12 @@ let mapError;
 let mapLoading = false;
 const mapKeyStorage = 'mgts-dgis-map-tiles-key';
 const mapErrorMessages = {
-  'sdk-request': 'Не загрузился MapGL 2ГИС',
-  'sdk-timeout': 'Истекло время загрузки MapGL 2ГИС',
-  'tiles-timeout': 'Тайлы 2ГИС не загрузились',
-  key: '2ГИС отклонил ключ Map Tiles API',
-  style: 'Не загрузился стиль карты 2ГИС',
-  render: 'Ошибка при запуске карты 2ГИС'
+  'sdk-request': 'Не удалось загрузить карту',
+  'sdk-timeout': 'Истекло время загрузки карты',
+  'tiles-timeout': 'Не загрузились фрагменты карты',
+  key: 'Сервис карт отклонил ключ Map Tiles API',
+  style: 'Не загрузился стиль карты',
+  render: 'Ошибка при запуске карты'
 };
 
 function savedMapKey() {
@@ -235,7 +246,7 @@ function openMapSettings() {
     key: 'Проверьте доступ к Map Tiles API и срок действия ключа в Менеджере Платформы.',
     'tiles-timeout': 'Проверьте доступ ключа к Map Tiles API и попробуйте снова.',
     render: 'Для карты нужен браузер с доступным WebGL.'
-  }[mapError] ?? 'Подойдёт демо-ключ 2ГИС с доступом к Map Tiles API.';
+  }[mapError] ?? 'Подойдёт демо-ключ с доступом к Map Tiles API.';
   $('map-settings').showModal();
 }
 
@@ -262,9 +273,9 @@ function setMapStatus() {
   const statusElement = $('map-status');
   const connected = Boolean(inspectionMap);
   const message = state.pin ? (state.moveId ? 'Выберите новое место точки. Esc — отмена.' : 'Нажмите на карту, чтобы сохранить точку.') :
-    mapLoading ? 'Загрузка 2ГИС…' :
-    mapError ? mapErrorMessages[mapError] : connected ? (routeUnavailable ? '2ГИС не построил автомобильный маршрут.' : '') :
-    'Подключите 2ГИС, чтобы открыть маршрут и точки.';
+    mapLoading ? 'Загрузка карты…' :
+    mapError ? mapErrorMessages[mapError] : connected ? (routeUnavailable ? 'Не удалось построить автомобильный маршрут.' : '') :
+    'Подключите карту, чтобы открыть маршрут и точки.';
   statusElement.textContent = message;
   statusElement.hidden = !message;
   $('pin-button').setAttribute('aria-pressed', state.pin);
@@ -275,7 +286,7 @@ function setMapStatus() {
   $('provider-zoom').hidden = !connected;
   $('map').classList.toggle('map-active', connected);
   $('map').classList.toggle('placing-point', state.pin);
-  $('map-provider').textContent = connected ? '2ГИС' : 'Подключить 2ГИС';
+  $('map-provider').textContent = connected ? 'Настройки карты' : 'Подключить карту';
 }
 
 function createMarkerButton(record) {
@@ -311,10 +322,10 @@ function activateRoute(choice, focus = true) {
   drivePlayer?.exit();
   drivingRoute = choice;
   records.route = choice.points;
-  records.routeSource = {kind:'driving', label:'Маршрут 2ГИС', distance:choice.distance, duration:choice.duration};
+  records.routeSource = {kind:'driving', label:'Автомобильный маршрут', distance:choice.distance, duration:choice.duration};
   inspectionMap.selectRoute(choice);
   $('route-select').value = choice.id;
-  $('route-credit').textContent = records.routeSource.label;
+  renderDeck();
   drivePlayer = createDrivePlayer(inspectionMap, choice, resetPin, showNearestDrivePoint);
   if (focus) {
     resetPin();
@@ -326,7 +337,12 @@ function activateRoute(choice, focus = true) {
 
 $('route-select').addEventListener('change', event => {
   const choice = drivingRoutes.find(route => route.id === event.target.value);
-  if (choice) activateRoute(choice);
+  if (choice && inspectionMap) activateRoute(choice);
+  else {
+    renderDeck();
+    const first = routeRecords(currentSurveyRoute()).find(record => visibleObjects().includes(record));
+    if (first) showRecord(first.id);
+  }
 });
 
 async function startMap() {
@@ -373,8 +389,6 @@ async function startMap() {
       $('route-select').replaceChildren(...drivingRoutes.map(choice => new Option(choice.name, choice.id)));
       $('route-picker').hidden = drivingRoutes.length < 2;
       activateRoute(drivingRoute, false);
-    } else if (displayedRoute().length > 1 && records.routeSource) {
-      $('route-credit').innerHTML = sourceLink(records.routeSource);
     }
   } catch (error) {
     mapError = error instanceof DgisMapError ? error.code : 'render';
@@ -422,6 +436,7 @@ function addPoint([longitude, latitude]) {
     if (record) {
       setOperatorPoint(record, coordinates);
       showRecord(record.id);
+      renderDeck();
       persist('Положение точки сохранено в этом браузере.');
     }
     return;
@@ -456,6 +471,7 @@ function deletePoint() {
   else setOperatorPoint(record, null);
   renderSelection();
   renderTotals();
+  renderDeck();
   persist('Точка удалена в этом браузере.');
 }
 
@@ -758,7 +774,22 @@ function step(direction) {
   showRecord(visible[(index + direction + visible.length) % visible.length].id, true);
 }
 
+$('note-form').addEventListener('submit', event => {
+  event.preventDefault();
+  const note = $('note-text').value.trim();
+  if (!note || !noteTarget) return;
+  const {record, routeId, carPoint} = noteTarget;
+  record.inspectionReview = {...record.inspectionReview, note, routeId, carPoint, frame:record.frame};
+  $('review-note').close();
+  renderSelection();
+  persist('Заметка сохранена в этом браузере.');
+});
+
 const actions = {
+  note: openReviewNote, 'close-note': () => $('review-note').close(),
+  queue: () => { queueOnly = !queueOnly; renderList(); },
+  'route-report': reportRoute, 'close-report': () => $('report-dialog').close(),
+  'route-geojson': exportRouteGeoJSON, 'print-report': () => window.print(),
   fit: () => {
     drivePlayer?.exit();
     const route = drivingRoutes.length > 1 ? drivingRoutes.flatMap(choice => choice.points) : displayedRoute();
@@ -804,6 +835,15 @@ document.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
   const data = button.dataset;
+  if (data.decision) decideRecord(data.decision);
+  if (data.shot) {
+    if (!visibleObjects().some(r => r.id === data.shot)) state.filter = $('priority-filter').value = 'all';
+    if (drivePlayer) {
+      $('drive-progress').value = Math.round(Number(data.fraction) * 1000);
+      $('drive-progress').dispatchEvent(new Event('input'));
+    }
+    showRecord(data.shot);
+  }
   if (data.view) switchView(data.view);
   if (data.action) actions[data.action]?.();
   if (data.editorRecord) {
@@ -902,17 +942,21 @@ async function loadInspection() {
     const savedObjects = new Map(records.objects.filter(item => item.origin === 'backend').map(item => [item.id, item]));
     for (const record of backend.objects) {
       const saved = savedObjects.get(record.id);
+      if (saved?.inspectionReview) record.inspectionReview = saved.inspectionReview;
       if (saved?.pointEdited) setOperatorPoint(record, saved.point);
       const frame = frameById(record.frame);
       if (frame?.localEdits && record.box) updateBoxReference(record, frame);
     }
     records.objects = [...backend.objects, ...records.objects.filter(record => record.origin !== 'backend')];
     backendConnected = true;
-    $('data-mode').textContent = 'Локальный API · демоданные';
   } catch {
-    $('data-mode').textContent = 'Демоданные · API недоступен';
+    backendConnected = false;
   }
   document.querySelector('[data-action="upload"]').disabled = false;
+  const routes = records.routes || [];
+  $('route-select').replaceChildren(...routes.map(route => new Option(route.name, route.id)));
+  $('route-picker').hidden = routes.length < 2;
+  renderDeck();
   renderTotals();
   renderSelection();
   if (state.view !== 'map') renderList();

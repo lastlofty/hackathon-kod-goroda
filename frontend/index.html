@@ -8,11 +8,12 @@
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=84533d6b7e2e">
-<script defer src="./dgis-map.js?v=526e646a83d0"></script>
-<script defer src="./drive.js?v=e0556aca1f15"></script>
+<link rel="stylesheet" href="./styles.css?v=58e4a25a8f57">
+<script defer src="./dgis-map.js?v=44d9969c7556"></script>
+<script defer src="./drive.js?v=308d7e01209c"></script>
 <script defer src="./backend-api.js?v=a5a160199ffa"></script>
-<script defer src="./app.js?v=86c248971f56"></script>
+<script defer src="./survey.js?v=41a33d94134c"></script>
+<script defer src="./app.js?v=daf7d1d8a92b"></script>
 </head>
 <body>
 <header class="topbar">
@@ -26,35 +27,43 @@
 </header>
 <main>
   <header class="survey-bar">
-    <div class="survey-title"><span id="data-mode" class="subtle">Демоданные</span><h1 id="page-title" hidden></h1></div>
+    <div class="survey-title" hidden><h1 id="page-title"></h1></div>
     <div class="totals" id="totals" aria-label="Сводка обследования"></div>
+    <button class="button" id="route-report" data-action="route-report" hidden>Отчёт по маршруту</button>
     <button class="button" data-action="export">Экспорт CSV</button>
   </header>
   <section id="map-view" class="map-view" aria-label="Карта и карточка объекта">
+    <div class="map-workspace">
+      <div class="route-bar"><h2>Карта маршрута</h2><label id="route-picker" class="route-picker" hidden>Маршрут
+          <select id="route-select" aria-label="Выбрать маршрут"></select>
+        </label></div>
     <div class="map-area">
       <div id="map" aria-label="Карта объектов"></div>
+      <div id="route-schematic" aria-hidden="true" hidden></div>
       <div class="map-controls">
         <div class="map-tools">
         <button class="button" data-action="fit" id="fit-button" hidden>Весь маршрут</button>
         <button class="button" data-action="pin" id="pin-button" aria-pressed="false" hidden>+ Поставить точку</button>
-        <button class="button" type="button" data-action="map-settings" id="map-provider">Подключить 2ГИС</button>
+        <button class="button" type="button" data-action="map-settings" id="map-provider">Подключить карту</button>
         </div>
-        <label id="route-picker" class="route-picker" hidden>Маршрут
-          <select id="route-select" aria-label="Выбрать маршрут"></select>
-        </label>
         <div id="route-hover" class="route-hover" hidden></div>
-        <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
-          <button id="drive-play" type="button" class="button">Проезд 3D</button>
-          <button id="drive-restart" type="button" class="button icon" aria-label="С начала" title="С начала">↻</button>
-          <input id="drive-progress" type="range" min="0" max="1000" value="0" aria-label="Позиция машины на маршруте">
-          <span id="drive-detail" class="mono"></span>
-        </div>
-        <div id="map-status" class="map-status" role="status">Подключите 2ГИС, чтобы открыть маршрут и точки.</div>
+        <div id="map-status" class="map-status" role="status">Подключите карту, чтобы открыть маршрут и точки.</div>
       </div>
       <div id="provider-zoom" class="provider-zoom" hidden>
         <button class="button icon" type="button" data-action="zoom-in" aria-label="Приблизить">+</button>
         <button class="button icon" type="button" data-action="zoom-out" aria-label="Отдалить">−</button>
       </div>
+    </div>
+      <section class="route-deck" aria-label="Просмотр кадров маршрута">
+        <div class="deck-head"><h2>Кадры маршрута</h2><span id="route-count" class="mono"></span></div>
+        <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
+          <button id="drive-play" type="button" class="button">Проезд 3D</button>
+          <button id="drive-restart" type="button" class="button icon" aria-label="С начала" title="С начала">↻</button>
+          <div class="seek-track"><input id="drive-progress" type="range" min="0" max="1000" value="0" aria-label="Позиция машины на маршруте"><span class="seek-ticks" id="seek-ticks"></span></div>
+          <span id="drive-detail" class="mono"></span>
+        </div>
+        <div id="route-frames" class="route-frames"></div>
+      </section>
     </div>
     <aside class="inspector" aria-label="Выбранный объект">
       <div class="inspector-bar">
@@ -65,6 +74,7 @@
         </label>
         <div class="stepper"><button class="button icon" data-action="prev" aria-label="Предыдущий объект">‹</button><span id="position"></span><button class="button icon" data-action="next" aria-label="Следующий объект">›</button></div>
       </div>
+      <div id="inspector-content"></div>
       <details class="status-guide">
         <summary>Условные обозначения</summary>
         <ul>
@@ -73,9 +83,8 @@
           <li><i class="dot normal"></i>Без замечаний</li>
           <li><i class="dot unverified"></i>Не обследовано</li>
         </ul>
-        <p id="route-credit"></p>
       </details>
-      <div id="inspector-content"></div>
+
     </aside>
   </section>
   <section id="list-view" class="list-view" hidden aria-label="Список записей"></section>
@@ -109,6 +118,13 @@
   </div>
   <div class="dialog-foot"><button class="button" data-action="export-boxes">Скачать JSON</button><button class="button primary" data-action="apply-json">Применить к кадру</button></div>
 </dialog>
+<dialog id="review-note" aria-labelledby="note-title">
+  <form id="note-form"><div class="dialog-head"><h2 id="note-title">Отметить проблему</h2><button type="button" class="button icon" data-action="close-note" aria-label="Закрыть">×</button></div>
+    <label class="file-field">Что проверить<textarea id="note-text" rows="4" required maxlength="1500"></textarea></label>
+    <div class="dialog-foot"><span class="subtle" id="note-object"></span><button class="button primary">Сохранить заметку</button></div>
+  </form>
+</dialog>
+<dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-head"><h2 id="report-title">Отчёт по маршруту</h2><button class="button icon" data-action="close-report" aria-label="Закрыть">×</button></div><div id="report-body"></div><div class="dialog-foot"><button class="button" data-action="route-geojson">Скачать GeoJSON</button><button class="button primary" data-action="print-report">Печать / PDF</button></div></dialog>
 <dialog id="upload-dialog" aria-labelledby="upload-title">
   <form id="upload-form">
     <div class="dialog-head"><h2 id="upload-title">Добавить снимок</h2><button type="button" class="button icon" data-action="close-upload" aria-label="Закрыть загрузку">×</button></div>
@@ -118,11 +134,11 @@
 </dialog>
 <dialog id="map-settings" aria-labelledby="map-settings-title">
   <form id="map-settings-form">
-    <div class="dialog-head"><h2 id="map-settings-title">2ГИС</h2><button type="button" class="button icon" data-action="close-map-settings" aria-label="Закрыть настройки карты">×</button></div>
+    <div class="dialog-head"><h2 id="map-settings-title">Настройки карты</h2><button type="button" class="button icon" data-action="close-map-settings" aria-label="Закрыть настройки карты">×</button></div>
     <label class="file-field">Ключ Map Tiles API
       <input id="map-key-input" type="password" autocomplete="off" spellcheck="false" maxlength="200" required>
     </label>
-    <p class="map-settings-note subtle" id="map-settings-note" role="status">Подойдёт демо-ключ 2ГИС с доступом к Map Tiles API.</p>
+    <p class="map-settings-note subtle" id="map-settings-note" role="status">Подойдёт демо-ключ с доступом к Map Tiles API.</p>
     <p class="map-settings-note subtle"><a href="https://platform.2gis.ru/ru/" target="_blank" rel="noopener noreferrer">Менеджер Платформы</a> · <a href="https://docs.2gis.com/platform-manager/demo-key" target="_blank" rel="noopener noreferrer">Получить демо-ключ</a></p>
     <div class="dialog-foot"><button class="button" type="button" data-action="reset-map-key" id="map-key-reset" hidden>Сбросить ключ</button><button class="button primary" type="submit">Подключить</button></div>
   </form>
