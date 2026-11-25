@@ -2,6 +2,7 @@
 
 const inspectionCollections = ['frames', 'entities', 'types', 'standalone_findings'];
 let inspectionCache;
+let supportsAnnotationRevisions = false;
 let inspectionStream;
 let inspectionRevision = 0;
 
@@ -10,6 +11,7 @@ function inspectionPath(endpoint) {
 }
 
 function replaceInspectionBatch(batch) {
+  supportsAnnotationRevisions = batch.supports_annotation_revisions === true;
   inspectionCache = Object.fromEntries(inspectionCollections.map(key =>
     [key, new Map(batch[key].map(row => [row.id, row]))]));
 }

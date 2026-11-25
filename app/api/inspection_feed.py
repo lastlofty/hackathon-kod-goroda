@@ -6,16 +6,18 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession
 from app.db.session import SessionLocal
+from app.models.annotation import AnnotationRevision
 from app.models.entity import Entity
 from app.models.entity_type import EntityType
 from app.models.finding import Finding
 from app.models.media import Media
 from app.models.workspace import Workspace
+from app.schemas.annotation import RevisionRead
 from app.schemas.entity import EntityRead
 from app.schemas.entity_type import EntityTypeRead
 from app.schemas.finding import FindingRead
@@ -38,6 +40,16 @@ def snapshot(db: Session, slug: str) -> dict:
     frames = rows(db, workspace_id, Media, MediaRead)
     for frame in frames.values():
         frame["findings"] = []
+        frame["annotation_review"] = None
+    latest = (select(AnnotationRevision.media_id, func.max(AnnotationRevision.version).label("version"))
+              .join(Media).where(Media.workspace_id == workspace_id)
+              .group_by(AnnotationRevision.media_id).subquery())
+    review_query = select(AnnotationRevision).join(latest, and_(
+        AnnotationRevision.media_id == latest.c.media_id, AnnotationRevision.version == latest.c.version))
+    for review in db.scalars(review_query):
+        frame = frames.get(str(review.media_id))
+        if frame is not None:
+            frame["annotation_review"] = RevisionRead.model_validate(review).model_dump(mode="json")
     result["frames"] = frames
     result["types"] = rows(db, workspace_id, EntityType, EntityTypeRead)
     result["entities"] = rows(db, workspace_id, Entity, EntityRead)
@@ -51,7 +63,7 @@ def snapshot(db: Session, slug: str) -> dict:
 
 
 def batch(data):
-    return {key: list(values.values()) for key, values in data.items()}
+    return {"supports_annotation_revisions": True, **{key: list(values.values()) for key, values in data.items()}}
 
 
 def changes(previous, current):

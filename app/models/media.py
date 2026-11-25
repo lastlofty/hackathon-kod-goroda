@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.models.common import UUIDTimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.annotation import AnnotationRevision
     from app.models.finding import Finding
     from app.models.job import ProcessingJob
     from app.models.workspace import Workspace
@@ -32,6 +33,7 @@ class Media(UUIDTimestampMixin, Base):
     source: Mapped[str | None] = mapped_column(String(128))
     attributes: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
+    annotation_revisions: Mapped[list["AnnotationRevision"]] = relationship(cascade="all, delete-orphan")
     workspace: Mapped["Workspace"] = relationship(back_populates="media")
     jobs: Mapped[list["ProcessingJob"]] = relationship(back_populates="media")
     findings: Mapped[list["Finding"]] = relationship(back_populates="media")

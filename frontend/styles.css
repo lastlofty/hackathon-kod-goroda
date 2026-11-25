@@ -334,3 +334,48 @@ button.path-shape .path-ink,.editor-image[data-mode="edit"] .path-ink { pointer-
 
 .atlas-sheet.single-stop .atlas-photo img { max-height:420px }
 @media print { .atlas-sheet.single-stop .atlas-photo img { max-height:155mm } }
+
+#annotation-author { width:12em; max-width:100%; padding:4px 6px; color:var(--ink); background:var(--base); border:1px solid var(--line); border-radius:4px }
+#annotation-log { max-height:9em; overflow:auto; padding:6px 12px; font-size:12px }
+
+.overview { width:min(1440px,100%); margin:0 auto; padding:clamp(14px,2.6vw,40px); color:var(--ink) }
+.overview-head,.overview-route-heading,.overview-metrics,.overview-statuses div,.overview-route-heading button { display:flex; align-items:center }
+.overview-head { justify-content:space-between; gap:14px; margin:0 0 24px }
+.overview h1 { margin:0; font-size:clamp(25px,3vw,42px); line-height:1.1; letter-spacing:-.045em }
+.overview-metrics { gap:clamp(16px,3vw,44px); padding:0 0 0 18px; border-left:1px solid var(--line) }
+.overview dt,.overview small,.overview-caption,.overview-route-heading>span { color:var(--muted); font-size:12px }
+.overview-metrics dd { font-size:24px; font-weight:650; font-variant-numeric:tabular-nums }
+.overview-grid { display:grid; grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr); gap:18px; align-items:start }
+.overview-side { display:grid; gap:16px }
+.overview-grid section { min-width:0; background:var(--paper); border:1px solid var(--line); border-radius:7px; overflow:hidden }
+.overview h2 { font-size:17px; line-height:1.25; letter-spacing:-.02em; margin:16px 18px 12px }
+.overview-plot { position:relative; isolation:isolate; border-block:1px solid var(--line); background:#151c24 }
+#overview-map { width:100%; height:clamp(255px,34vh,380px); background:#151c24; touch-action:none; overscroll-behavior:contain }
+.overview-map-number { padding:0; cursor:pointer; display:grid; place-items:center; width:22px; height:22px; box-sizing:border-box; border:2px solid; border-radius:50%; background:#102233; color:white; font:600 12px/1 sans-serif }
+#overview-map-notice { position:absolute; z-index:1000; left:8px; bottom:6px; padding:3px 6px; background:#151c24; color:var(--muted) }
+.overview ul { list-style:none; margin:0; padding:0 }
+.overview li+li { border-top:1px solid var(--line) }
+.overview-routes li { padding:12px 18px }
+.overview-route-heading { justify-content:space-between; gap:8px; margin-bottom:5px }
+.overview-route-heading button,.overview-queue button { padding:0; background:transparent; border:0; color:var(--ink); text-align:left; font:inherit; cursor:pointer }
+.overview-route-heading button { gap:8px; font-weight:600 }
+.overview-number { display:grid; place-items:center; min-width:21px; height:21px; border:1px solid var(--brand-border); border-radius:50%; color:var(--brand); font-size:12px }
+.overview-route-heading>span { white-space:nowrap }
+.overview-band,.overview-distribution { display:flex; width:100%; gap:2px }
+.overview-band button { flex-basis:0; min-width:0; height:20px; border:0; padding:0; background:linear-gradient(var(--segment),var(--segment)) center/100% 7px no-repeat; cursor:pointer }
+.overview-band button:hover,.overview-band button:focus-visible { background-size:100% 13px }
+.overview-caption { margin:0 18px }
+.overview-distribution { width:calc(100% - 36px); height:12px; margin:13px 18px; border-radius:3px; overflow:hidden; background:var(--base) }
+.overview-statuses { margin:0 18px 14px }
+.overview-statuses div { gap:8px; padding:4px 0 }
+.overview-statuses i { width:8px; height:8px; border-radius:50% }
+.overview-statuses dd { margin-left:auto; font-variant-numeric:tabular-nums }
+.overview-queue button { width:100%; display:grid; grid-template-columns:55px minmax(0,1fr) auto; align-items:center; gap:9px; padding:10px 16px }
+.overview-queue button:hover,.overview-route-heading button:hover { color:var(--brand) }
+.overview-queue img,.overview-no-photo { width:55px; height:41px; border-radius:3px; object-fit:cover }
+.overview-no-photo { display:grid; place-items:center; font-size:10px; background:var(--base); color:var(--muted) }
+.overview-queue strong,.overview-queue small { display:block; overflow-wrap:anywhere; line-height:1.35 }
+.overview-priority { color:var(--segment); font-size:11px; text-align:right }
+.overview-empty { padding:16px; color:var(--muted) }
+@media(max-width:840px) { .overview-grid { grid-template-columns:1fr } .overview-head { flex-wrap:wrap } }
+@media(max-width:480px) { .overview-head { display:grid; gap:12px } .overview-metrics { padding:0; border:0 } .overview-route-heading button { font-size:13px } .overview-queue button { grid-template-columns:47px minmax(0,1fr) } .overview-priority { grid-column:2; text-align:left } }

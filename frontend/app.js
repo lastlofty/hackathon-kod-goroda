@@ -72,6 +72,7 @@ function showRecord(id, move = false) {
   sectionView.showList = false;
   state.selected = id;
   state.overlay = true;
+  state.modelView = false;
   renderSelection();
   if (move && isValidPoint(record.point)) {
     drivePlayer?.exit();
@@ -89,7 +90,7 @@ async function lookupPointAddress([lon, lat]) {
   } catch (error) {
     if (error.status === 404) return '';
     // In a standalone preview the operator may only have configured the browser key.
-    const key = savedMapKey() || document.querySelector('meta[name="mgts-dgis-api-key"]').content;
+    const key = configuredMapKey();
     if (!key) throw error;
     query.set('key', key);
     query.set('locale', 'ru_RU');
@@ -164,13 +165,15 @@ function renderSelection() {
     return;
   }
   const frame = frameById(record.frame);
-  const box = frame?.boxes.find(item => item.id === record.box);
   const point = formatPoint(record.point);
   const sources = [sourceLink(record.source, 'Источник координат'), sourceLink(frame?.source, 'Источник снимка')].filter(Boolean);
-  const focused = frame?.boxes.find(item => item.id === state.focusBox);
+  const modelView = state.modelView && Array.isArray(frame?.modelBoxes);
+  const shownBoxes = modelView ? frame.modelBoxes : frame?.boxes || [];
+  const focused = !modelView && frame?.boxes.find(item => item.id === state.focusBox);
   const figure = frame ? `<div class="frame-panel">
-    <figure class="frame">${focused ? cropHTML(frame, focused) : `<div class="frame-bounds"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</div>`}</figure>
-    <div class="frame-tools">${focused ? '<button class="button" data-action="full-frame">Весь кадр</button>' : `<div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div>`}<button class="button" title="Править рамки (E)" aria-keyshortcuts="E" data-frame="${escapeHTML(frame.id)}">Править разметку ↗</button></div>
+    <figure class="frame">${focused ? cropHTML(frame, focused) : `<div class="frame-bounds"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? shownBoxes.map(item => boxHTML(item, false, false, modelView ? undefined : frame.id)).join('') : ''}</div>`}</figure>
+    <div class="frame-tools">${focused ? '<button class="button" data-action="full-frame">Весь кадр</button>' : `<div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay && !modelView}">${frame.annotationReview ? 'Проверено' : 'Разметка'}</button>${Array.isArray(frame.modelBoxes) ? `<button data-action="model-view" aria-pressed="${Boolean(state.overlay && modelView)}">${frame.demo ? 'Из набора' : 'Модель'}</button>` : ''}</div>`}<button class="button" title="Править рамки (E)" aria-keyshortcuts="E" data-frame="${escapeHTML(frame.id)}">Править разметку ↗</button></div>
+    ${frame.annotationReview ? `<p class="subtle">Версия ${frame.annotationReview.version} · ${escapeHTML(frame.annotationReview.author)} · ${escapeHTML(backendDate.format(new Date(frame.annotationReview.created_at)))}</p>` : ''}
     ${focused ? boxReviewControls(frame,focused) : ''}
   </div>` : '<p class="empty">К этому объекту кадр не привязан.</p>';
   $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span><button class="table-link compare-link" data-action="compare">До / после</button>${status(record)}</div><h2>${escapeHTML(recordLabel(record))}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
@@ -195,6 +198,7 @@ function renderTotals() {
 }
 
 function renderList() {
+  if (state.view === 'overview') { renderOverview(); return; }
   const exportButton = '<button class="table-link" data-action="export-json">Скачать JSON</button>';
   if (state.view === 'registry') {
     const listed = queueOnly ? records.objects.filter(needsFollowup).sort((a,b) => (a.confidence ?? 101) - (b.confidence ?? 101)) : records.objects;
@@ -211,13 +215,16 @@ function switchView(view) {
   if (view !== 'map' && liveSurvey.active) setLiveMode(false);
   state.view = view;
   $('map-view').hidden = view !== 'map';
-  $('list-view').hidden = view === 'map';
+  $('list-view').hidden = view !== 'registry' && view !== 'history';
+  $('overview-content').hidden = view !== 'overview';
+  document.querySelector('.survey-bar').hidden = view === 'overview';
   const pageTitle = $('page-title');
   pageTitle.textContent = {registry: 'Реестр объектов', history: 'История снимков'}[view] ?? '';
   pageTitle.parentElement.hidden = view === 'map';
   $('route-report').hidden = !currentSurveyRoute() || view !== 'map';
   document.querySelectorAll('[data-view]').forEach(button => button.setAttribute('aria-pressed', button.dataset.view === view));
   if (view === 'map') {
+    if (mapStartDeferred) { mapStartDeferred = false; startMap(); }
     renderSelection();
   } else {
     resetPin();
@@ -233,6 +240,7 @@ let routeUnavailable = false;
 let backendConnected = false;
 let mapError;
 let mapLoading = false;
+let mapStartDeferred = false;
 const mapKeyStorage = 'mgts-dgis-map-tiles-key';
 const mapErrorMessages = {
   'sdk-request': 'Не удалось загрузить карту',
@@ -242,6 +250,10 @@ const mapErrorMessages = {
   style: 'Не загрузился стиль карты',
   render: 'Ошибка при запуске карты'
 };
+
+function configuredMapKey() {
+  return savedMapKey() || document.querySelector('meta[name="mgts-dgis-api-key"]').content.trim();
+}
 
 function savedMapKey() {
   try {
@@ -382,7 +394,7 @@ $('route-select').addEventListener('change', event => {
 });
 
 async function startMap() {
-  const key = savedMapKey() || document.querySelector('meta[name="mgts-dgis-api-key"]').content.trim();
+  const key = configuredMapKey();
   if (!key) {
     setMapStatus();
     return;
@@ -541,6 +553,13 @@ function openEditor(id, preferredBox) {
   drivePlayer?.pause();
   holdLive(id);
   editor.frame = frame;
+  $('annotation-author-field').hidden = !frame.sharedAnnotations;
+  $('annotation-history').hidden = !frame.annotationReview;
+  $('annotation-log').hidden = true;
+  $('annotation-log').replaceChildren();
+  if (!$('annotation-author').value) {
+    try { $('annotation-author').value = localStorage.getItem(savedKey + ':reviewer') || ''; } catch {}
+  }
   editor.boxes = frame.boxes.map(box => ({...box}));
   selectEditorBox(preferredBox);
   editor.drag = null;
@@ -839,12 +858,45 @@ function updateBoxReference(record, frame) {
   }
 }
 
-function saveBoxes() {
+async function saveBoxes() {
+  if (editor.saving) return false;
   const frame = editor.frame;
   const previous = new Map(frame.boxes.map(box => [box.id, JSON.stringify(box)]));
   const changedIds = new Set(frame.boxes.filter(box => !editor.boxes.some(item => item.id === box.id)).map(box => box.id));
   for (const box of editor.boxes) {
     if (previous.get(box.id) !== JSON.stringify(box)) changedIds.add(box.id);
+  }
+  if (frame.localEdits && frame.sharedAnnotations) {
+    const prior = frame.editedBoxIds || [...(frame.modelBoxes || []),...frame.boxes].map(box => box.id);
+    prior.forEach(id => changedIds.add(id));
+  }
+  if (frame.sharedAnnotations && changedIds.size) {
+    const author = $('annotation-author').value.trim();
+    if (!author) {
+      $('editor-hint').textContent = 'Укажите имя оператора для истории версий.';
+      $('annotation-author').focus();
+      return false;
+    }
+    const changes = Object.fromEntries([...changedIds].map(id => [id,annotationChange(editor.boxes.find(box => box.id === id))]));
+    editor.saving = true;
+    $('annotator').inert = true;
+    try {
+      frame.annotationReview = await backendRequest('/api/v1/media/' + encodeURIComponent(frame.id) + '/annotations', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({base_version:frame.annotationReview?.version || 0,author,changes})
+      });
+      try { localStorage.setItem(savedKey + ':reviewer',author); } catch {}
+      delete frame.localEdits;
+      delete frame.editedBoxIds;
+    } catch (error) {
+      $('editor-hint').textContent = error.status === 409
+        ? 'Появилась другая версия. Ваш черновик доступен в JSON. Откройте кадр заново, чтобы увидеть правки коллеги.'
+        : 'Сервер не подтвердил сохранение. Черновик открыт, можно повторить сохранение или скачать JSON.';
+      return false;
+    } finally {
+      editor.saving = false;
+      $('annotator').inert = false;
+    }
   }
   if (changedIds.size) {
     const linked = records.objects.filter(record => record.frame === frame.id);
@@ -853,7 +905,7 @@ function saveBoxes() {
     if (!affected.length) recordChange('Изменены рамки кадра', linked.length === 1 ? linked[0] : null, frame);
   }
   frame.boxes = editor.boxes;
-  if (frame.backend && changedIds.size) {
+  if (frame.backend && !frame.sharedAnnotations && changedIds.size) {
     if (!frame.localEdits || frame.editedBoxIds) {
       frame.editedBoxIds = [...new Set([...(frame.editedBoxIds || []), ...changedIds])];
     }
@@ -865,16 +917,16 @@ function saveBoxes() {
   renderDeck();
   if (state.view === 'map') renderSelection();
   else renderList();
-  persist('Разметка сохранена в этом браузере.');
+  persist(frame.annotationReview ? 'Сохранена версия ' + frame.annotationReview.version : 'Разметка сохранена в этом браузере.');
+  return true;
 }
 
-function saveBeforeNavigation() {
+async function saveBeforeNavigation() {
   if (editor.tracing) return false;
   if (editor.vertices.length) { $('editor-hint').textContent = 'Завершите фигуру или уберите вершины перед переходом.'; return false; }
   if (JSON.stringify(editor.boxes) === JSON.stringify(editor.frame.boxes)) return true;
   if (!window.confirm('Сохранить изменения рамок и перейти дальше? При отмене вы останетесь в редакторе.')) return false;
-  saveBoxes();
-  return true;
+  return saveBoxes();
 }
 
 async function imagePreview(file) {
@@ -963,7 +1015,31 @@ $('note-form').addEventListener('submit', event => {
   persist('Заметка сохранена в этом браузере.');
 });
 
+$('annotator').addEventListener('cancel',event => { if (editor.saving) event.preventDefault(); });
+
+async function showAnnotationHistory() {
+  const frame = editor.frame;
+  const log = $('annotation-log');
+  if (!log.hidden) { log.hidden = true; return; }
+  log.hidden = false;
+  log.textContent = 'Загрузка версий…';
+  try {
+    const versions = await backendRequest('/api/v1/media/' + encodeURIComponent(frame.id) + '/annotations');
+    if (editor.frame !== frame) return;
+    log.replaceChildren(...versions.map(rev => {
+      const row = document.createElement('p');
+      const names = rev.changed_ids.map(id => frame.boxes.find(box=>box.id===id)?.label ||
+        frame.modelBoxes?.find(box=>box.id===id)?.label || id);
+      row.textContent = 'Версия ' + rev.version + ' · ' + rev.author + ' · ' + backendDate.format(new Date(rev.created_at)) + ' · ' + names.join(', ');
+      return row;
+    }));
+  } catch {
+    if (editor.frame === frame) log.textContent = 'Не удалось загрузить историю версий.';
+  }
+}
+
 const actions = {
+  'annotation-history': showAnnotationHistory,
   retakes: () => changePointFilter(state.filter === 'retake' ? 'all' : 'retake'),
   compare: openComparison, 'close-compare': () => $('compare-dialog').close(),
   'full-frame': () => { state.focusBox = null; renderSelection(); },
@@ -989,7 +1065,8 @@ const actions = {
   'zoom-in': () => inspectionMap?.zoom(1),
   'zoom-out': () => inspectionMap?.zoom(-1),
   original: () => { state.overlay = false; renderSelection(); document.querySelector('[data-action="original"]')?.focus({preventScroll:true}); },
-  overlay: () => { state.overlay = true; renderSelection(); document.querySelector('[data-action="overlay"]')?.focus({preventScroll:true}); },
+  'model-view': () => { state.overlay = true; state.modelView = true; state.focusBox = null; renderSelection(); document.querySelector('[data-action="model-view"]')?.focus(); },
+  overlay: () => { state.modelView = false; state.overlay = true; renderSelection(); document.querySelector('[data-action="overlay"]')?.focus({preventScroll:true}); },
   'close-editor': () => $('annotator').close(),
   draw: () => startGeometry('draw'),
   polyline: () => startGeometry('polyline'),
@@ -1008,10 +1085,10 @@ const actions = {
   },
   redraw: () => { editor.mode = 'redraw'; renderEditor(); },
   'delete-box': () => { editor.boxes = editor.boxes.filter(box => box.id !== editor.selected); selectEditorBox(); renderEditor(); },
-  'save-boxes': () => { saveBoxes(); $('annotator').close(); },
-  'next-frame': () => {
+  'save-boxes': async () => { if (await saveBoxes()) $('annotator').close(); },
+  'next-frame': async () => {
     const next = records.frames[records.frames.indexOf(editor.frame) + 1];
-    if (next && saveBeforeNavigation()) openEditor(next.id);
+    if (next && await saveBeforeNavigation()) openEditor(next.id);
   },
   'move-point': () => startPin(null, null, state.selected),
   'delete-point': deletePoint,
@@ -1037,7 +1114,7 @@ const actions = {
   'close-upload': () => $('upload-dialog').close(), export: exportCSV, 'export-json': exportJSON
 };
 
-document.addEventListener('click', event => {
+document.addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button) return;
   const data = button.dataset;
@@ -1061,7 +1138,7 @@ document.addEventListener('click', event => {
   if (data.view) switchView(data.view);
   if (data.action) actions[data.action]?.();
   if (data.editorRecord) {
-    if (!saveBeforeNavigation()) return;
+    if (!await saveBeforeNavigation()) return;
     $('annotator').close();
     state.filter = $('priority-filter').value = 'all';
     switchView('map');
@@ -1106,11 +1183,13 @@ function savedInspection() {
 }
 
 function mergeInspection(dataset, saved) {
+  const examples = new Map(dataset.frames.filter(f=>f.demo).map(f=>[f.id,f.boxes]));
+  dataset = {...dataset, frames:dataset.frames.map(f=>f.demo ? {...f,modelBoxes:f.boxes} : f)};
   if (!saved) return dataset;
   if (saved.datasetId && saved.datasetId !== dataset.datasetId) return dataset;
   if (saved.datasetId) {
     const existingFrames = new Set(saved.frames.map(frame => frame.id));
-    const frames = saved.frames.concat(dataset.frames.filter(frame => !existingFrames.has(frame.id)));
+    const frames = saved.frames.map(frame=>examples.has(frame.id) ? {...frame,modelBoxes:examples.get(frame.id)} : frame).concat(dataset.frames.filter(frame => !existingFrames.has(frame.id)));
     const missing = new Map(dataset.objects.map(record => [record.id, record]));
     const objects = saved.objects.map(record => {
       const seed = missing.get(record.id);
@@ -1140,10 +1219,13 @@ function mergeInspection(dataset, saved) {
 
 function applyBackendInspection(backend) {
   const selectedFrame = records.objects.find(record => record.id === state.selected)?.frame;
-  const editedFrames = new Map(records.frames.filter(frame => frame.backend && frame.localEdits).map(frame => [frame.id, frame]));
+  const editedFrames = new Map(records.frames.filter(frame => frame.backend && (frame.localEdits || frame.annotationReview)).map(frame => [frame.id, frame]));
   records.frames = [...backend.frames.map(frame => {
     const edited = editedFrames.get(frame.id);
-    if (!edited) return frame;
+    if (edited?.annotationReview?.version > (frame.annotationReview?.version || 0)) {
+      applyAnnotationReview(frame,edited.annotationReview);
+    }
+    if (!edited?.localEdits || frame.annotationReview) return frame;
     const overrides = new Set(edited.editedBoxIds);
     const boxes = edited.editedBoxIds ? frame.boxes.filter(box => !overrides.has(box.id))
       .concat(edited.boxes.filter(box => overrides.has(box.id))) : edited.boxes;
@@ -1155,7 +1237,7 @@ function applyBackendInspection(backend) {
     if (saved?.inspectionReview) record.inspectionReview = saved.inspectionReview;
     if (saved?.pointEdited) setOperatorPoint(record, saved.point);
     const frame = frameById(record.frame);
-    if (frame?.localEdits && record.box) updateBoxReference(record, frame);
+    if ((frame?.localEdits || frame?.annotationReview) && record.box) updateBoxReference(record, frame);
   }
   records.objects = [...backend.objects, ...records.objects.filter(record => record.origin !== 'backend')];
   if (selectedFrame && !records.objects.some(record => record.id === state.selected)) {
@@ -1209,9 +1291,11 @@ async function loadInspection() {
   renderTotals();
   renderSelection();
   if (state.view !== 'map') renderList();
+  if (new URLSearchParams(location.search).get('view') === 'overview' && !location.hash && state.view === 'map') switchView('overview');
   openRecordLink();
   window.addEventListener('hashchange', openRecordLink);
-  startMap();
+  if (state.view === 'map') startMap();
+  else mapStartDeferred = true;
   if (inspectionCache || !backendConnected) startInspectionStream(backend => {
     pendingInspection = backend;
     flushInspection();

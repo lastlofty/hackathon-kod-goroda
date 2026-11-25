@@ -71,10 +71,12 @@ function backendPoint(record) {
 
 async function backendBox(finding, frame, label, sizes) {
   const box = finding.geometry;
-  if (box?.type && box.type !== 'bbox') return null;
+  if (!box || (box.type && box.type !== 'bbox' && !isPathType(box.type))) return null;
   const width = box?.width ?? box?.w;
   const height = box?.height ?? box?.h;
-  if (![box?.x, box?.y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
+  if (isPathType(box.type)) {
+    if (!Array.isArray(box.points) || !box.points.every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite))) return null;
+  } else if (![box.x, box.y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
   let imageWidth = 1;
   let imageHeight = 1;
   if (box.coordinate_space !== 'normalized') {
@@ -90,13 +92,38 @@ async function backendBox(finding, frame, label, sizes) {
     if (!size) return null;
     [imageWidth, imageHeight] = size;
   }
+  const source = finding.source === 'manual' ? 'manual' : frame.demo ? 'demo' : 'model';
+  if (isPathType(box.type)) {
+    const points = box.points.map(([x,y]) => [x/imageWidth,y/imageHeight]);
+    if (!validPath(box.type,points)) return null;
+    return {id:finding.id,label,type:box.type,points,...pathBounds(points),source};
+  }
   const x = Math.max(0, box.x / imageWidth);
   const y = Math.max(0, box.y / imageHeight);
   const w = Math.min(1, (box.x + width) / imageWidth) - x;
   const h = Math.min(1, (box.y + height) / imageHeight) - y;
   if (w <= 0 || h <= 0) return null;
   return {id: finding.id, label, x, y, w, h,
-    source: finding.source === 'manual' ? 'manual' : frame.demo ? 'demo' : 'model'};
+    source};
+}
+
+function applyAnnotationReview(frame,review) {
+  frame.annotationReview = review || null;
+  if (!review) return;
+  const changes = review.overrides;
+  frame.boxes = frame.modelBoxes.filter(box => !Object.hasOwn(changes,box.id));
+  for (const [id,shape] of Object.entries(changes)) {
+    if (!shape) continue;
+    const bounds = isPathType(shape.type) ? pathBounds(shape.points) : {};
+    frame.boxes.push({...shape,...bounds,id,source:'manual'});
+  }
+}
+
+function annotationChange(box) {
+  if (!box) return null;
+  if (isPathType(box.type)) return {type:box.type,label:box.label,points:box.points};
+  const {x,y,w,h,label} = box;
+  return {type:'bbox',x,y,w,h,label};
 }
 
 async function loadLegacyInspection() {
@@ -146,6 +173,13 @@ async function buildBackendInspection(types, entities, media, findings) {
     };
   });
 
+  for (const frame of frames) {
+    const media = mediaById.get(frame.id);
+    frame.modelBoxes = frame.boxes;
+    frame.sharedAnnotations = Object.hasOwn(media,'annotation_review');
+    applyAnnotationReview(frame,media.annotation_review);
+  }
+
   function objectRecord(entity, finding) {
     const id = entity?.id || finding.id;
     const frame = frameById.get(finding?.media_id);
@@ -187,5 +221,8 @@ async function uploadBackendPhoto(file) {
   body.set('workspace_id', await ensureWorkspace());
   body.set('file', file);
   body.set('source', 'operator');
-  return backendFrame(await backendRequest('/api/v1/media/upload', {method: 'POST', body}));
+  const frame = backendFrame(await backendRequest('/api/v1/media/upload', {method: 'POST', body}));
+  frame.modelBoxes = [];
+  frame.sharedAnnotations = supportsAnnotationRevisions;
+  return frame;
 }

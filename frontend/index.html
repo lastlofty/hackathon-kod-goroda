@@ -8,11 +8,11 @@
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=48caaaf47256">
-<script defer src="./dgis-map.js?v=0859a0608e24"></script>
+<link rel="stylesheet" href="./styles.css?v=1e6bea9180b0">
+<script defer src="./dgis-map.js?v=5f0dde4c4b7d"></script>
 <script defer src="./drive.js?v=308d7e01209c"></script>
-<script defer src="./backend-api.js?v=2a5666c42cfe"></script>
-<script defer src="./inspection-feed.js?v=446664ceadea"></script>
+<script defer src="./backend-api.js?v=4a45d03e5f93"></script>
+<script defer src="./inspection-feed.js?v=d09171e2deb6"></script>
 <script defer src="./survey.js?v=db1e29ec3885"></script>
 <script defer src="./fieldwork.js?v=c731c3244cd2"></script>
 <script defer src="./live-survey.js?v=2fd92c219ad3"></script>
@@ -21,12 +21,14 @@
 <script defer src="./annotation-path.js?v=2ae6ed67ca47"></script>
 <script defer src="./route-atlas.js?v=ad36c35f094d"></script>
 <script defer src="./crew.js?v=448a25b70659"></script>
-<script defer src="./app.js?v=cab689a8bc89"></script>
+<script defer src="./overview.js?v=ae8de2930409"></script>
+<script defer src="./app.js?v=c0eec7b299f1"></script>
 </head>
 <body>
 <header class="topbar">
   <div class="identity"><b>МГТС</b><span>Обследование сети</span></div>
   <nav aria-label="Разделы">
+    <button data-view="overview" aria-pressed="false">Обзор</button>
     <button data-view="map" aria-pressed="true">Карта</button>
     <button data-view="registry" aria-pressed="false">Реестр</button>
     <button data-view="history" aria-pressed="false">История</button>
@@ -104,6 +106,7 @@
 
     </aside>
   </section>
+  <section id="overview-content" class="overview" hidden aria-label="Обзор обследований"></section>
   <section id="list-view" class="list-view" hidden aria-label="Список записей"></section>
 </main>
 <dialog id="annotator" aria-labelledby="edit-title">
@@ -124,8 +127,11 @@
     <button class="button" data-action="redraw" aria-pressed="false">Перерисовать</button>
     <button class="button" data-action="delete-box">Удалить</button>
     <button class="button" data-action="box-json">JSON разметки</button>
+    <label id="annotation-author-field" hidden>Оператор <input id="annotation-author" type="text" maxlength="128" autocomplete="name"></label>
+    <button class="button" id="annotation-history" data-action="annotation-history" hidden>История версий</button>
     <button class="button" id="inference-button" data-action="show-inference" hidden>Результат модели</button>
   </div>
+  <div id="annotation-log" aria-live="polite" hidden></div>
   <div class="edit-body">
     <div class="edit-viewport"><div id="editor-image" class="editor-image"><img id="edit-photo" alt="Снимок для ручной разметки" draggable="false"><div id="edit-boxes"></div></div></div>
     <aside id="boxes-list" class="boxes-list" aria-label="Разметка кадра"></aside>

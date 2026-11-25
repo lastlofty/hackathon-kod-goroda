@@ -55,7 +55,13 @@ class DgisMapError extends Error {
   }
 }
 
-async function loadDgisSdk() {
+let pendingDgisSdk;
+function loadDgisSdk() {
+  if (!pendingDgisSdk) pendingDgisSdk = requestDgisSdk().finally(() => { pendingDgisSdk = null; });
+  return pendingDgisSdk;
+}
+
+async function requestDgisSdk() {
   if (window.mapgl?.Map) return window.mapgl;
   const script = document.createElement('script');
   script.src = 'https://mapgl.2gis.com/api/js/v1';
@@ -200,6 +206,40 @@ function drawRouteLine(map, route, color) {
   };
 }
 
+function fitDgisPoints(map, coordinates, duration = 250) {
+  if (!coordinates.length) return;
+  if (coordinates.length === 1) {
+    map.setCenter(coordinates[0], {duration});
+    map.setZoom(17, {duration});
+    return;
+  }
+  const lngs = coordinates.map(([lng]) => lng);
+  const lats = coordinates.map(([, lat]) => lat);
+  map.fitBounds({
+    southWest: [Math.min(...lngs), Math.min(...lats)],
+    northEast: [Math.max(...lngs), Math.max(...lats)]
+  }, {
+    padding: {top: 60, right: 30, bottom: 60, left: 30},
+    maxZoom: 17,
+    animation: {duration}
+  });
+}
+
+async function createDgisStreetMap(api, container, key, center, zoom, controls = {}) {
+  const map = new api.Map(container, {
+    key, style: dgisNightStyle, defaultBackgroundColor: '#17212c', center, zoom,
+    maxZoom: 19, maxPitch: 60, lang: 'ru', loopWorld: true, graphicsPreset: 'normal',
+    enableTrackResize: true, zoomControl: false, floorControl: false, ...controls
+  });
+  try {
+    await waitForDgisTiles(map);
+    return map;
+  } catch (error) {
+    map.destroy();
+    throw error;
+  }
+}
+
 async function initDgisMap({container, key, route, routes = [], points = [], markerButton, onSelect, onPoint, onRouteSelect, onRouteHover, canPickRoute}) {
   const api = await loadDgisSdk();
   const choices = routes.length ? routes : (route.length > 1 ? [{points: route}] : []);
@@ -282,42 +322,10 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
       container.addEventListener(type, pinch, options);
     }
   }
-  const fitPoints = (coordinates, duration = 250) => {
-    if (!coordinates.length) return;
-    if (coordinates.length === 1) {
-      map.setCenter(coordinates[0], {duration});
-      map.setZoom(17, {duration});
-      return;
-    }
-    const lngs = coordinates.map(([lng]) => lng);
-    const lats = coordinates.map(([, lat]) => lat);
-    map.fitBounds({
-      southWest: [Math.min(...lngs), Math.min(...lats)],
-      northEast: [Math.max(...lngs), Math.max(...lats)]
-    }, {
-      padding: {top: 60, right: 30, bottom: 60, left: 30},
-      maxZoom: 17,
-      animation: {duration}
-    });
-  };
+  const fitPoints = (coordinates, duration) => fitDgisPoints(map, coordinates, duration);
 
   try {
-    map = new api.Map(container, {
-      key,
-      style: dgisNightStyle,
-      defaultBackgroundColor: '#17212c',
-      center,
-      zoom: focus.length ? 15 : 1,
-      maxZoom: 19,
-      maxPitch: 60,
-      lang: 'ru',
-      loopWorld: true,
-      graphicsPreset: 'normal',
-      enableTrackResize: true,
-      zoomControl: false,
-      floorControl: false
-    });
-    await waitForDgisTiles(map);
+    map = await createDgisStreetMap(api, container, key, center, focus.length ? 15 : 1);
     fitPoints(focus, 0);
     for (const choice of choices) lines.set(choice, drawRouteLine(map, choice.points));
     styleRoutes();

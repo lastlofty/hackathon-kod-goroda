@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api import (
+    annotations,
     entities,
     entity_types,
     findings,
@@ -16,6 +17,7 @@ api_router.include_router(workspaces.router)
 api_router.include_router(entity_types.router)
 api_router.include_router(entities.router)
 api_router.include_router(media.router)
+api_router.include_router(annotations.router)
 api_router.include_router(jobs.router)
 api_router.include_router(findings.router)
 api_router.include_router(geocoding.router)
