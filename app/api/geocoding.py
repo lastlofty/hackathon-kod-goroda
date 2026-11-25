@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.config import get_settings
-from app.integrations.dgis import DgisClient, DgisError
+from app.integrations.dgis import DgisClient, DgisError, DgisUnavailable
 from app.schemas.geocoding import GeocodingResponse
 
 router = APIRouter(prefix="/geocoding", tags=["geocoding"])
@@ -28,6 +28,11 @@ DgisDependency = Annotated[DgisClient, Depends(get_dgis_client)]
 
 
 def raise_provider_error(error: DgisError) -> None:
+    if isinstance(error, DgisUnavailable):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="2GIS integration is unavailable",
+        )
     if error.provider_code == 404:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error.message)
     if error.provider_code in {401, 403}:
