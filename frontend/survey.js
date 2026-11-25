@@ -173,8 +173,9 @@ function renderDeck() {
     const frame = frameById(record.frame);
     const state = reviewState(record);
     const [symbol, label] = reviewMarks[state];
-    return `<button type="button" class="seek-mark" data-review="${state}" data-symbol="${symbol}" style="left:${100 * fraction}%" data-shot="${escapeHTML(record.id)}" data-fraction="${fraction}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(record.type)} · ${label}"><span><img src="${escapeHTML(frame.src)}" alt="">${escapeHTML(record.type)} · ${label}</span></button>`;
+    return `<button type="button" class="seek-mark" data-review="${state}" data-symbol="${symbol}" style="left:${100 * fraction}%" data-shot="${escapeHTML(record.id)}" data-fraction="${fraction}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(recordLabel(record))} · ${label}"><span><img src="${escapeHTML(frame.src)}" alt="">${escapeHTML(recordLabel(record))} · ${label}</span></button>`;
   }).join('');
+  updateSections(route);
   renderRouteSchematic(route);
   const pendingFrames = new Set(shots.filter(({record}) => reviewState(record) === 'pending').map(({record}) => record.frame));
   $('route-count').textContent = route || liveSurvey.active ? `Проверено ${shots.length - pendingFrames.size} из ${shots.length}` : '';
@@ -182,7 +183,7 @@ function renderDeck() {
     const frame = frameById(record.frame);
     const review = reviewState(record);
     const [symbol, label] = reviewMarks[review];
-    return `<button class="film-shot" data-review="${review}" data-symbol="${symbol}" data-shot="${escapeHTML(record.id)}" ${fraction === undefined ? '' : `data-fraction="${fraction}"`} aria-pressed="${record.id === state.selected}" title="${escapeHTML(record.type)} · ${escapeHTML(displayId(record))} · ${label}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(record.type)} · ${label}"><img src="${escapeHTML(frame.src)}" alt=""><span>${escapeHTML(record.type)}</span></button>`;
+    return `<button class="film-shot" data-review="${review}" data-symbol="${symbol}" data-shot="${escapeHTML(record.id)}" ${fraction === undefined ? '' : `data-fraction="${fraction}"`} aria-pressed="${record.id === state.selected}" title="${escapeHTML(recordLabel(record))} · ${escapeHTML(displayId(record))} · ${label}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(recordLabel(record))} · ${label}"><img src="${escapeHTML(frame.src)}" alt=""><span>${escapeHTML(recordLabel(record))}</span></button>`;
   }).join('') || '<p class="subtle">Нет привязанных кадров.</p>';
   $('route-report').hidden = !route || state.view !== 'map';
 }
@@ -246,9 +247,10 @@ function updateRouteReport() {
   $('report-body').innerHTML = `<p>Точек: ${objects.length} · Проверено: ${objects.filter(r => reviewState(r) !== 'pending').length} · На проверку: ${objects.filter(needsFollowup).length}</p>` +
     objects.map(r => {
       const frame = frameById(r.frame);
-      const box = frame?.boxes.find(b => b.id === r.box);
+      const boxes = frame ? reportBoxes(frame) : [];
+      const box = boxes.find(b => b.id === r.box);
       const reason = retakeReason(r) || r.issue || (needsFollowup(r) ? 'Требуется проверка' : '');
-      return `<article>${issuesOnly && box ? cropHTML(frame, box) : frame ? `<figure class="frame"><img src="${escapeHTML(frame.src)}" alt="">${frame.boxes.map(b => boxHTML(b)).join('')}</figure>` : ''}<div><strong>${escapeHTML(displayId(r))} · ${escapeHTML(r.type)}</strong>${!r.routeId ? '<p>Вне маршрута</p>' : ''}<p class="stop-address">${escapeHTML(r.place || formatPoint(r.point))}</p><p>${escapeHTML(reviewMarks[reviewState(r)][1])}</p>${issuesOnly && reason ? `<p>${escapeHTML(reason)}</p>` : ''}${r.inspectionReview?.note ? `<p>${escapeHTML(r.inspectionReview.note)}</p>` : ''}</div></article>`;
+      return `<article>${issuesOnly && box ? cropHTML(frame, box) : frame ? `<figure class="frame"><img src="${escapeHTML(frame.src)}" alt="">${boxes.map(b => boxHTML(b)).join('')}</figure>` : ''}<div><strong>${escapeHTML(displayId(r))} · ${escapeHTML(recordLabel(r))}</strong>${!r.routeId ? '<p>Вне маршрута</p>' : ''}<p class="stop-address">${escapeHTML(r.place || formatPoint(r.point))}</p><p>${escapeHTML(reviewMarks[reviewState(r)][1])}</p>${issuesOnly && reason ? `<p>${escapeHTML(reason)}</p>` : ''}${r.inspectionReview?.note ? `<p>${escapeHTML(r.inspectionReview.note)}</p>` : ''}${reviewSummary(frame).map(line => `<p>${escapeHTML(line)}</p>`).join('')}</div></article>`;
     }).join('');
   $('report-body').querySelectorAll('article').forEach((article,index) => {
     const record = objects[index];
@@ -262,7 +264,7 @@ function exportRouteGeoJSON() {
   if (!route) return;
   const features = routeRecords(route).filter(r => isValidPoint(r.point)).map(r => ({
     type:'Feature', id:r.id, geometry:{type:'Point', coordinates:r.point},
-    properties:{routeId:route.id, label:r.type, address:r.place, frame:r.frame, review:r.inspectionReview || null}
+    properties:{routeId:route.id, label:recordLabel(r), address:r.place, frame:r.frame, review:r.inspectionReview || null, boxReviews:reviewSummary(frameById(r.frame))}
   }));
   if (route.points?.length > 1) features.unshift({type:'Feature', geometry:{type:'LineString', coordinates:route.points}, properties:{name:route.name, routeId:route.id}});
   download(JSON.stringify({type:'FeatureCollection', features}, null, 2), 'application/geo+json', route.id + '.geojson');
@@ -283,7 +285,8 @@ function renderRouteSchematic(selected) {
   const extent = points.map(project);
   const width = Math.max(...extent.map(p => p[0])), height = Math.max(...extent.map(p => p[1]));
   host.innerHTML = `<svg viewBox="-50 -50 ${width+100} ${height+100}" fill="none">${routes.map(r =>
-    `<polyline points="${r.points.map(p => project(p).join(',')).join(' ')}" stroke="${r.id === selected?.id ? 'var(--brand)' : '#758a9e'}" stroke-linejoin="round" stroke-width="4" vector-effect="non-scaling-stroke"/>`).join('')}${stops.map(record => {
+    `<polyline points="${r.points.map(p => project(p).join(',')).join(' ')}" stroke="${r.id === selected?.id ? 'var(--brand)' : '#758a9e'}" stroke-linejoin="round" stroke-width="4" vector-effect="non-scaling-stroke"/>`).join('')}${sectionView.parts.map(p =>
+      `<polyline data-section="${p.index}" points="${p.path.map(v=>project(v).join(',')).join(' ')}" stroke="${sectionColors[p.priority]}" stroke-width="${sectionView.index===p.index ? 9:7}" vector-effect="non-scaling-stroke" style="pointer-events:stroke;cursor:pointer"><title>${sectionRange(p)} · ${sectionName(p.priority)}</title></polyline>`).join('')}${stops.map(record => {
       const [x,y] = project(record.point);
       return `<circle cx="${x}" cy="${y}" r="7" fill="var(--brand)" stroke="white" vector-effect="non-scaling-stroke"/>`;
     }).join('')}</svg>`;

@@ -48,11 +48,13 @@ function persist(message) {
 
 function boxHTML(box, selected = false, editable = false, frameId) {
   if (!box) return '';
-  const classes = ['box', box.source === 'manual' ? 'manual' : '', selected ? 'selected' : '', box.y < .08 ? 'top' : '', box.x > .67 ? 'right' : ''].join(' ');
+  const frame = frameId && frameById(frameId);
+  const verdict = frame && boxVerdict(frame,box.id);
+  const classes = ['box', verdict?.decision === 'rejected' ? 'rejected-box' : '', box.source === 'manual' ? 'manual' : '', selected ? 'selected' : '', box.y < .08 ? 'top' : '', box.x > .67 ? 'right' : ''].join(' ');
   const handles = editable && selected ? ['nw','ne','sw','se'].map(corner => `<i class="box-handle" data-corner="${corner}"></i>`).join('') : '';
   const tag = frameId ? 'button' : 'div';
   const action = frameId ? `type="button" data-focus-frame="${escapeHTML(frameId)}" aria-label="Увеличить рамку: ${escapeHTML(box.label)}"` : '';
-  return `<${tag} ${action} class="${classes}" data-box-id="${escapeHTML(box.id)}" style="--x:${box.x};--y:${box.y};--w:${box.w};--h:${box.h}"><span class="tag">${escapeHTML(box.label)}</span>${handles}</${tag}>`;
+  return `<${tag} ${action} class="${classes}" data-box-id="${escapeHTML(box.id)}" style="--x:${box.x};--y:${box.y};--w:${box.w};--h:${box.h}"><span class="tag">${escapeHTML(frame ? checkedLabel(frame,box) : box.label)}</span>${handles}</${tag}>`;
 }
 
 function showRecord(id, move = false) {
@@ -63,6 +65,7 @@ function showRecord(id, move = false) {
   }
   if (state.pin) resetPin();
   holdLive(record.frame);
+  sectionView.showList = false;
   state.selected = id;
   state.overlay = true;
   renderSelection();
@@ -129,6 +132,14 @@ function renderSelection() {
   if (state.focusRecord !== record?.id) state.focusBox = null;
   state.focusRecord = state.selected = record?.id;
   renderRetakes();
+  const section = sectionView.enabled && !liveSurvey.active && sectionView.parts[sectionView.index];
+  $('section-back').hidden = !section || sectionView.showList;
+  document.querySelector('.inspector-bar').hidden = Boolean(section && sectionView.showList);
+  if (section && sectionView.showList) {
+    renderSectionCard(section);
+    renderMarkers();
+    return;
+  }
   for (const shot of $('route-frames').children) {
     if (!shot.dataset.shot) continue;
     const selected = shot.dataset.shot === record?.id;
@@ -154,10 +165,11 @@ function renderSelection() {
   const sources = [sourceLink(record.source, 'Источник координат'), sourceLink(frame?.source, 'Источник снимка')].filter(Boolean);
   const focused = frame?.boxes.find(item => item.id === state.focusBox);
   const figure = frame ? `<div class="frame-panel">
-    <figure class="frame">${focused ? cropHTML(frame, focused) : `<div class="frame-bounds"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => (frame.backend || item.source === 'manual') && item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</div>`}</figure>
+    <figure class="frame">${focused ? cropHTML(frame, focused) : `<div class="frame-bounds"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</div>`}</figure>
     <div class="frame-tools">${focused ? '<button class="button" data-action="full-frame">Весь кадр</button>' : `<div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div>`}<button class="button" title="Править рамки (E)" aria-keyshortcuts="E" data-frame="${escapeHTML(frame.id)}">Править рамки ↗</button></div>
+    ${focused ? boxReviewControls(frame,focused) : ''}
   </div>` : '<p class="empty">К этому объекту кадр не привязан.</p>';
-  $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span><button class="table-link compare-link" data-action="compare">До / после</button>${status(record)}</div><h2>${escapeHTML(record.type)}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
+  $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span><button class="table-link compare-link" data-action="compare">До / после</button>${status(record)}</div><h2>${escapeHTML(recordLabel(record))}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
     ${figure}${frame ? reviewControls(record) : ''}<div class="record-data"><dl><div><dt>Признак</dt><dd>${escapeHTML(record.issue ?? 'Нет данных о состоянии')}</dd></div>
     <div><dt>Уверенность модели</dt><dd>${!frame?.demo && Number.isFinite(record.confidence) ? record.confidence + '%' : '—'}</dd></div>
     <div><dt>Адрес точки</dt><dd id="point-address" aria-live="polite"></dd></div>
@@ -182,7 +194,7 @@ function renderList() {
   const exportButton = '<button class="table-link" data-action="export-json">Скачать JSON</button>';
   if (state.view === 'registry') {
     const listed = queueOnly ? records.objects.filter(needsFollowup).sort((a,b) => (a.confidence ?? 101) - (b.confidence ?? 101)) : records.objects;
-    const rows = listed.map(record => `<tr><td class="mono">${escapeHTML(displayId(record))}</td><td><span class="file-cell">${queueOnly && frameById(record.frame) ? `<img src="${escapeHTML(frameById(record.frame).src)}" alt="">` : ''}${escapeHTML(record.type)}</span></td><td>${escapeHTML(record.issue ?? '—')}</td><td>${status(record)}</td><td>${escapeHTML(record.inspectionReview?.note || reviewNames[record.inspectionReview?.decision] || '—')}</td><td>${escapeHTML(record.place || formatPoint(record.point))}</td><td><button class="table-link" data-record="${escapeHTML(record.id)}">${isValidPoint(record.point) ? 'На карте ↗' : 'Карточка ↗'}</button></td></tr>`).join('');
+    const rows = listed.map(record => `<tr><td class="mono">${escapeHTML(displayId(record))}</td><td><span class="file-cell">${queueOnly && frameById(record.frame) ? `<img src="${escapeHTML(frameById(record.frame).src)}" alt="">` : ''}${escapeHTML(recordLabel(record))}</span></td><td>${escapeHTML(record.issue ?? '—')}</td><td>${status(record)}</td><td>${escapeHTML(record.inspectionReview?.note || reviewNames[record.inspectionReview?.decision] || '—')}</td><td>${escapeHTML(record.place || formatPoint(record.point))}</td><td><button class="table-link" data-record="${escapeHTML(record.id)}">${isValidPoint(record.point) ? 'На карте ↗' : 'Карточка ↗'}</button></td></tr>`).join('');
     $('list-view').innerHTML = `<div class="queue-tools"><button class="button" data-action="queue" aria-pressed="${queueOnly}">Требуют проверки · ${records.objects.filter(needsFollowup).length}</button></div><div class="table-shell"><table><thead><tr><th>ID</th><th>Объект</th><th>Признак</th><th>Статус</th><th>Проверка кадра</th><th>Место</th><th>Просмотр</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Очередь пуста.</td></tr>'}</tbody></table></div>`;
     return;
   }
@@ -336,6 +348,11 @@ function activateRoute(choice, focus = true) {
   renderDeck();
   drivePlayer = createDrivePlayer(inspectionMap, choice, () => {
     if (liveSurvey.active) setLiveMode(false);
+    if (sectionView.enabled) {
+      sectionView.enabled = sectionView.showList = false;
+      renderDeck();
+      renderSelection();
+    }
     resetPin();
   }, showNearestDrivePoint);
   if (!focus && state.filter === 'retake') renderSelection();
@@ -801,7 +818,7 @@ function download(content,type,name) {
 
 function exportCSV() {
   const rows = [['ID','Объект','Признак','Статус','Место','Широта','Долгота','Источник']];
-  for (const r of records.objects) rows.push([displayId(r),r.type,r.issue ?? '',priorities[priorityOf(r)],r.place,r.point?.[1] ?? '',r.point?.[0] ?? '',r.source?.url ?? '']);
+  for (const r of records.objects) rows.push([displayId(r),recordLabel(r),r.issue ?? '',priorities[priorityOf(r)],r.place,r.point?.[1] ?? '',r.point?.[0] ?? '',r.source?.url ?? '']);
   const text = rows.map(row => row.map(value => '"' + String(value).replaceAll('"','""') + '"').join(';')).join('\r\n');
   download('\ufeff' + text,'text/csv;charset=utf-8','mgts-objects.csv');
 }
@@ -977,7 +994,7 @@ function mergeInspection(dataset, saved) {
       return merged;
     });
     const comparisonPhotos = [...(dataset.comparisonPhotos || []), ...(saved.comparisonPhotos || []).filter(photo => photo.local)];
-    return {...dataset, frames, comparisonPhotos, objects:objects.concat([...missing.values()]), changes:Array.isArray(saved.changes) ? saved.changes : []};
+    return {...dataset, frames, comparisonPhotos, boxReviews:saved.boxReviews || {}, objects:objects.concat([...missing.values()]), changes:Array.isArray(saved.changes) ? saved.changes : []};
   }
 
   const demoFrames = new Map(dataset.frames.filter(frame => frame.demo).map(frame => [frame.id, frame]));
@@ -1046,6 +1063,7 @@ async function loadInspection() {
     if (saved?.datasetId && saved.schemaVersion === 1) records = saved;
     announce('Не удалось загрузить JSON обследования.');
   }
+  await restoreEventPhotos();
   try {
     const backend = await loadBackendInspection();
     applyBackendInspection(backend);
@@ -1070,6 +1088,7 @@ async function loadInspection() {
   });
 }
 
+bindCrewTools();
 bindSurveyTools();
 bindFieldwork();
 loadInspection();

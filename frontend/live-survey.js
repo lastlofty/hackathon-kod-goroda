@@ -48,11 +48,13 @@ function buildClassFilters() {
     const detectionId = record.box || (record.origin === 'backend' && frame?.inference?.find(f => f.id === record.id)?.id);
     const boxes = frame?.boxes.filter(box => !detectionId || box.id === detectionId ||
       (representative.get(frame.id) === record.id && !linkedBoxes.has(frame.id + '/' + box.id)));
-    for (const box of boxes || []) add(box.label, frame.id + '/' + box.id);
+    for (const box of boxes || []) {
+      if (boxVerdict(frame,box.id)?.decision !== 'rejected') add(checkedLabel(frame,box), frame.id + '/' + box.id);
+    }
     for (const finding of frame?.inference || []) {
       if ((!detectionId || finding.id === detectionId) && !finding.geometry) add(finding.label || finding.category, frame.id + '/' + finding.id);
     }
-    if (!labels.size && record.type !== 'Кадр проезда') add(record.type, record.id);
+    if (!boxes?.length && !labels.size && record.type !== 'Кадр проезда') add(record.type, record.id);
   }
   if (selectedClass && !counts.has(selectedClass)) counts.set(selectedClass, new Set());
   const html = ['<button type="button" data-survey-class="" aria-pressed="' + !selectedClass + '">Все классы</button>'];
@@ -77,6 +79,7 @@ function latestLiveRecord() {
 function renderLiveStatus() {
   const {active, heldFrame, baseline} = liveSurvey;
   $('live-toggle').setAttribute('aria-pressed', String(active));
+  $('live-event').hidden = !active || !isLiveFrame(frameById(records.objects.find(r=>r.id===state.selected)?.frame));
   $('live-return').hidden = !active || !heldFrame;
   $('live-status').hidden = !active;
   if (!active) return;
@@ -124,6 +127,7 @@ function syncLiveSelection() {
 
 function setLiveMode(active) {
   if (active) {
+    sectionView.enabled = sectionView.showList = false;
     drivePlayer?.exit();
     resetPin();
   }

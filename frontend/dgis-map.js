@@ -126,7 +126,7 @@ function waitForDgisTiles(map) {
 
 // Keep the driving line in the same screen plane as the car marker. Insert it
 // between the map canvas and the HTML markers so the car stays on top.
-function drawRouteLine(map, route) {
+function drawRouteLine(map, route, color) {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden';
@@ -141,7 +141,14 @@ function drawRouteLine(map, route) {
     svg.append(path);
     return path;
   });
-  map.getCanvas().after(svg);
+  svg.classList.add('survey-route-line');
+  const canvas = map.getCanvas();
+  const last = color && Array.from(canvas.parentNode.children).filter(el=>el.classList.contains('survey-route-line')).at(-1);
+  (last || canvas).after(svg);
+  if (color) {
+    lines[1].setAttribute('stroke', color);
+    lines[1].setAttribute('stroke-width', '7');
+  }
 
   function draw() {
     const [width, height] = map.getSize();
@@ -179,6 +186,11 @@ function drawRouteLine(map, route) {
   map.on('resize', draw);
   draw();
   return {
+    destroy() {
+      map.off('move',draw);
+      map.off('resize',draw);
+      svg.remove();
+    },
     contains: point => lines[2].isPointInStroke(new DOMPoint(point[0], point[1])),
     style(active, hovered, driving) {
       svg.style.visibility = driving && !active ? 'hidden' : 'visible';
@@ -198,6 +210,12 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
   let carIcon;
   let driveGestures;
   const lines = new Map();
+  let sectionLines = [];
+  let sectionSignature = '';
+  let onSection;
+  function sectionAt(point) {
+    return point && !vehicle && canPickRoute() && sectionLines.find(s=>s.line.contains(point));
+  }
   let selected = choices[0];
   let hovered;
   let targetZoom;
@@ -303,10 +321,15 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
     fitPoints(focus, 0);
     for (const choice of choices) lines.set(choice, drawRouteLine(map, choice.points));
     styleRoutes();
-    map.on('mousemove', event => hover(routeAt(event.point)));
+    map.on('mousemove', event => {
+      hover(routeAt(event.point));
+      if (sectionLines.length) container.style.cursor = sectionAt(event.point) || hovered ? 'pointer' : '';
+    });
     container.addEventListener('pointerleave', () => hover(undefined));
     map.on('movestart', () => hover(undefined));
     map.on('click', event => {
+      const section = sectionAt(event.point);
+      if (section) { onSection(section.index); return; }
       const choice = routeAt(event.point);
       if (choice) onRouteSelect(choice);
       else if (event.lngLat) onPoint(event.lngLat);
@@ -320,6 +343,14 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
   return {
     fitPoints,
     selectRoute,
+    setSections(parts, select) {
+      onSection = select;
+      const signature = JSON.stringify(parts.map(p=>[p.path,p.priority]));
+      if (signature === sectionSignature) return;
+      sectionSignature = signature;
+      for (const part of sectionLines) part.line.destroy();
+      sectionLines = parts.map(p=>({index:p.index,line:drawRouteLine(map,p.path,sectionColors[p.priority])}));
+    },
     startDrive(point) {
       overview = {center: map.getCenter().slice(), zoom: map.getZoom(), rotation: map.getRotation(), pitch: map.getPitch()};
       carIcon = document.createElement('div');

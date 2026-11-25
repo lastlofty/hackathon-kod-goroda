@@ -8,15 +8,17 @@
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=29cf322a43a9">
-<script defer src="./dgis-map.js?v=44d9969c7556"></script>
+<link rel="stylesheet" href="./styles.css?v=c55053f22e2d">
+<script defer src="./dgis-map.js?v=0859a0608e24"></script>
 <script defer src="./drive.js?v=308d7e01209c"></script>
 <script defer src="./backend-api.js?v=2a5666c42cfe"></script>
 <script defer src="./inspection-feed.js?v=446664ceadea"></script>
-<script defer src="./survey.js?v=0d7e7783eb91"></script>
+<script defer src="./survey.js?v=db1e29ec3885"></script>
 <script defer src="./fieldwork.js?v=36ca6449f2da"></script>
-<script defer src="./live-survey.js?v=77a99e394e63"></script>
-<script defer src="./app.js?v=ab5a6f5f9b5f"></script>
+<script defer src="./live-survey.js?v=2fd92c219ad3"></script>
+<script defer src="./vendor/fflate-0.8.2.js"></script>
+<script defer src="./crew.js?v=ddfa93ddbc54"></script>
+<script defer src="./app.js?v=07948719b92a"></script>
 </head>
 <body>
 <header class="topbar">
@@ -45,6 +47,7 @@
       <div id="route-schematic" aria-hidden="true" hidden></div>
       <div class="map-controls">
         <div class="map-tools">
+        <button type="button" class="button" id="section-toggle" aria-pressed="false">Участки · 100 м</button>
         <button class="button" id="retake-toggle" data-action="retakes" aria-pressed="false">Что переснять</button>
         <button class="button" data-action="fit" id="fit-button" hidden>Весь маршрут</button>
         <button class="button" data-action="pin" id="pin-button" aria-pressed="false" hidden>+ Поставить точку</button>
@@ -59,8 +62,9 @@
       </div>
     </div>
       <section class="route-deck" aria-label="Просмотр кадров маршрута">
+        <div id="section-strip" role="group" aria-label="Участки маршрута по приоритету" hidden></div>
         <div id="retake-list" hidden></div>
-        <div class="deck-head"><h2 id="deck-title">Кадры маршрута</h2><button type="button" class="button" id="live-toggle" aria-pressed="false">Следить за проездом</button><span id="live-status" role="status" hidden></span><button type="button" class="button" id="live-return" hidden>К последнему кадру</button><span id="route-count" class="mono" aria-live="polite"></span></div>
+        <div class="deck-head"><h2 id="deck-title">Кадры маршрута</h2><button type="button" class="button" id="live-toggle" aria-pressed="false">Следить за проездом</button><button type="button" class="button" id="live-event" hidden>Отметить событие</button><span id="live-status" role="status" hidden></span><button type="button" class="button" id="live-return" hidden>К последнему кадру</button><span id="route-count" class="mono" aria-live="polite"></span></div>
         <div class="route-time">
           <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
             <button id="drive-play" type="button" class="button">Проезд 3D</button>
@@ -83,6 +87,7 @@
         </label>
         <div class="stepper"><button class="button icon" data-action="prev" aria-label="Предыдущий объект">‹</button><span id="position"></span><button class="button icon" data-action="next" aria-label="Следующий объект">›</button></div>
       </div>
+      <button type="button" id="section-back" class="button" hidden>← К участку</button>
       <div id="inspector-content"></div>
       <details class="status-guide">
         <summary>Условные обозначения</summary>
@@ -132,6 +137,12 @@
   <div class="dialog-head"><h2 id="inference-title">Результат модели</h2><button class="button icon" data-action="close-inference" aria-label="Закрыть">×</button></div>
   <pre id="inference-data"></pre>
 </dialog>
+<dialog id="correct-class-dialog"><form id="correct-class-form">
+  <div class="dialog-head"><h2>Уточнить класс рамки</h2></div>
+  <label class="file-field">Правильный класс<input id="correct-class-input" list="crew-classes" maxlength="120" required></label>
+  <datalist id="crew-classes"><option>Опора освещения</option><option>Кабельный колодец</option><option>Шкаф связи</option><option>Опора связи</option><option>Светофор</option></datalist>
+  <div class="dialog-foot"><button type="button" class="button" id="correct-class-cancel">Отмена</button><button class="button primary">Сохранить</button></div>
+</form></dialog>
 <dialog id="review-note" aria-labelledby="note-title">
   <form id="note-form"><div class="dialog-head"><h2 id="note-title">Отметить проблему</h2><button type="button" class="button icon" data-action="close-note" aria-label="Закрыть">×</button></div>
     <label class="file-field">Что проверить<textarea id="note-text" rows="4" required maxlength="1500"></textarea></label>
