@@ -1,6 +1,15 @@
 from fastapi import APIRouter
 
-from app.api import entities, entity_types, findings, geocoding, inspection_feed, jobs, media, workspaces
+from app.api import (
+    entities,
+    entity_types,
+    findings,
+    geocoding,
+    inspection_feed,
+    jobs,
+    media,
+    workspaces,
+)
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(workspaces.router)
