@@ -4,6 +4,16 @@
   "coordinateOrder": "longitude,latitude",
   "coordinateSpace": "normalized-image-xywh",
   "route": [],
+  "comparisonPhotos": [
+    {
+      "id": "tverskoy-01-winter-2025",
+      "assetId": "ОО-001",
+      "day": "2025-12-15",
+      "name": "Страстной бульвар",
+      "src": "./assets/panoramas/tverskoy-01-2025.webp",
+      "source": "https://yandex.ru/maps/213/moscow/?ll=37.6075394749%2C55.7656803929&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6075394749%2C55.7656803929&panorama%5Bdirection%5D=264.06%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298079534_673098656_23_1765699301"
+    }
+  ],
   "frames": [
     {
       "id": "frame-01",

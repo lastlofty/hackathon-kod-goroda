@@ -4,8 +4,112 @@ const reviewNames = {confirmed: 'Подтверждено', unseen: 'Не вид
 let queueOnly = false;
 let noteTarget;
 
+const reviewMarks = {
+  pending: ['○', 'Ожидает проверки'],
+  confirmed: ['✓', 'Подтверждено'],
+  unseen: ['◌', 'Не видно на кадре'],
+  flagged: ['⚑', 'Отмечена проблема']
+};
+
+function reviewState(record) {
+  const review = record.inspectionReview;
+  if (review?.note) return 'flagged';
+  return Object.hasOwn(reviewNames, review?.decision) ? review.decision : 'pending';
+}
+
+function recordChange(action, record, frame) {
+  (records.changes ??= []).push({
+    time: new Date().toISOString(), action, recordId: record?.id, frameId: frame?.id || record?.frame,
+    label: record ? displayId(record) + ' · ' + record.type : frame.name
+  });
+}
+
+let historyObject = '';
+function historyLog() {
+  const changes = records.changes || [];
+  if (!changes.length) return '<section class="change-log"><h2>Журнал правок</h2><p class="subtle">Здесь появятся изменения точек, рамок и решения по кадрам.</p></section>';
+  const objects = new Map(changes.filter(change => change.recordId).map(change => [change.recordId, change.label]));
+  const options = [...objects].map(([id, label]) => `<option value="${escapeHTML(id)}" ${id === historyObject ? 'selected' : ''}>${escapeHTML(label)}</option>`).join('');
+  const rows = changes.filter(change => !historyObject || change.recordId === historyObject).slice().reverse().map(change => {
+    const exists = records.objects.some(record => record.id === change.recordId);
+    const label = escapeHTML(change.label);
+    return `<tr><td class="mono">${new Date(change.time).toLocaleString('ru-RU', {dateStyle:'short',timeStyle:'short'})}</td><td>${exists ? `<button class="table-link" data-record="${escapeHTML(change.recordId)}">${label}</button>` : label}</td><td>${escapeHTML(change.action)}</td></tr>`;
+  }).join('');
+  return `<section class="change-log"><div class="change-head"><h2>Журнал правок</h2><select aria-label="Объект в журнале" id="history-object"><option value="">Все объекты</option>${options}</select></div><div class="table-shell"><table><thead><tr><th>Когда</th><th>Объект или кадр</th><th>Изменение</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+
+async function copyRecordLink() {
+  const record = records.objects.find(r => r.id === state.selected);
+  if (!record) return;
+  const params = new URLSearchParams({point:record.id});
+  const routeId = record.routeId || currentSurveyRoute()?.id;
+  if (routeId) params.set('route', routeId);
+  if (record.frame) params.set('frame', record.frame);
+  const url = new URL(location.pathname, location.origin);
+  url.hash = params.toString();
+  try {
+    await navigator.clipboard.writeText(url.href);
+    announce('Ссылка на объект скопирована.');
+  } catch {
+    window.prompt('Скопируйте ссылку на объект', url.href);
+  }
+}
+
+function openRecordLink() {
+  const params = new URLSearchParams(location.hash.slice(1));
+  if (!params.has('point')) return;
+  const record = records.objects.find(r => r.id === params.get('point'));
+  if (!record) {
+    announce('Объект из ссылки отсутствует в этом наборе данных.');
+    return;
+  }
+  openSurveyRecord(record, params.get('route'));
+  if (params.has('frame') && params.get('frame') !== record.frame) announce('У объекта изменился привязанный кадр.');
+}
+
+function openSurveyRecord(record, preferredRoute) {
+  const routeId = record.routeId || preferredRoute;
+  const route = drivingRoutes.find(r => r.id === routeId);
+  state.filter = $('priority-filter').value = 'all';
+  if (state.view !== 'map') switchView('map');
+  if (route && inspectionMap && drivingRoute !== route) activateRoute(route, false);
+  else if ([...$('route-select').options].some(option => option.value === routeId)) {
+    $('route-select').value = routeId;
+    renderDeck();
+  }
+  showRecord(record.id, true);
+}
+
+function reviewShortcut(event) {
+  if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.altKey ||
+      event.metaKey || event.shiftKey || state.view !== 'map' || state.pin || document.querySelector('dialog[open]') ||
+      event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+  const record = records.objects.find(r => r.id === state.selected);
+  if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+    if (state.filter === 'retake') { event.preventDefault(); step(event.key === 'ArrowRight' ? 1 : -1); return; }
+    const shots = [...$('route-frames').querySelectorAll('[data-shot]')];
+    if (!shots.length) return;
+    const direction = event.key === 'ArrowRight' ? 1 : -1;
+    const index = shots.findIndex(shot => shot.dataset.shot === state.selected);
+    const next = index < 0 ? (direction > 0 ? 0 : shots.length - 1) : (index + direction + shots.length) % shots.length;
+    event.preventDefault();
+    shots[next].click();
+    if (event.target.closest('[data-shot]')) shots[next].focus({preventScroll:true});
+  } else if (record && frameById(record.frame)) {
+    if (event.code === 'KeyE' || event.key.toLowerCase() === 'e') {
+      event.preventDefault();
+      openEditor(record.frame, record.box);
+    } else if (event.key === 'Enter') {
+      const control = event.target.closest('button, a, summary, [role="button"]');
+      if (control && control.dataset.shot !== record.id) return;
+      event.preventDefault();
+      decideRecord('confirmed');
+    }
+  }
+}
+
 function currentSurveyRoute() {
-  return drivingRoute || records.routes?.find(route => route.id === $('route-select').value) || records.routes?.[0];
+  return (inspectionMap && drivingRoute) || records.routes?.find(route => route.id === $('route-select').value) || records.routes?.[0];
 }
 
 function routeRecords(route) {
@@ -37,21 +141,27 @@ function renderDeck() {
     .sort((a, b) => a.fraction - b.fraction);
   $('seek-ticks').innerHTML = shots.map(({record, fraction}) => {
     const frame = frameById(record.frame);
-    return `<button type="button" class="seek-mark" style="left:${100 * fraction}%" data-shot="${escapeHTML(record.id)}" data-fraction="${fraction}" aria-label="Кадр: ${escapeHTML(record.type)}"><span><img src="${escapeHTML(frame.src)}" alt="">${escapeHTML(record.type)}</span></button>`;
+    const state = reviewState(record);
+    const [symbol, label] = reviewMarks[state];
+    return `<button type="button" class="seek-mark" data-review="${state}" data-symbol="${symbol}" style="left:${100 * fraction}%" data-shot="${escapeHTML(record.id)}" data-fraction="${fraction}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(record.type)} · ${label}"><span><img src="${escapeHTML(frame.src)}" alt="">${escapeHTML(record.type)} · ${label}</span></button>`;
   }).join('');
   renderRouteSchematic(route);
-  $('route-count').textContent = route ? 'Кадров: ' + shots.length : '';
+  const frames = new Set(shots.map(({record}) => record.frame));
+  const pendingFrames = new Set(shots.filter(({record}) => reviewState(record) === 'pending').map(({record}) => record.frame));
+  $('route-count').textContent = route ? `Проверено ${frames.size - pendingFrames.size} из ${frames.size}` : '';
   $('route-frames').innerHTML = shots.map(({record, fraction}) => {
     const frame = frameById(record.frame);
-    return `<button class="film-shot" data-shot="${escapeHTML(record.id)}" data-fraction="${fraction}" aria-pressed="${record.id === state.selected}" title="${escapeHTML(record.type)} · ${escapeHTML(displayId(record))}"><img src="${escapeHTML(frame.src)}" alt=""><span>${escapeHTML(record.type)}</span></button>`;
+    const review = reviewState(record);
+    const [symbol, label] = reviewMarks[review];
+    return `<button class="film-shot" data-review="${review}" data-symbol="${symbol}" data-shot="${escapeHTML(record.id)}" data-fraction="${fraction}" aria-pressed="${record.id === state.selected}" title="${escapeHTML(record.type)} · ${escapeHTML(displayId(record))} · ${label}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(record.type)} · ${label}"><img src="${escapeHTML(frame.src)}" alt=""><span>${escapeHTML(record.type)}</span></button>`;
   }).join('') || '<p class="subtle">Нет привязанных кадров.</p>';
   $('route-report').hidden = !route || state.view !== 'map';
 }
 
 function reviewControls(record) {
   const review = record.inspectionReview || {};
-  return `<section class="review-controls"><div class="review-heading"><h3>Проверка кадра</h3><span>${escapeHTML(reviewNames[review.decision] || 'Ожидает проверки')}</span></div>
-    <div class="review-buttons"><button class="button confirm" data-decision="confirmed">Подтвердить</button><button class="button" data-decision="unseen">Не видно</button><button class="button" data-action="note">${review.note ? 'Править заметку' : 'Отметить проблему'}</button></div>
+  return `<section class="review-controls"><div class="review-heading"><h3>Проверка кадра</h3><span>${escapeHTML(reviewMarks[reviewState(record)][1])}</span></div>
+    <div class="review-buttons"><button class="button confirm" data-decision="confirmed" aria-keyshortcuts="Enter" title="Подтвердить (Enter)">Подтвердить</button><button class="button" data-decision="unseen">Не видно</button><button class="button" data-action="note">${review.note ? 'Править заметку' : 'Отметить проблему'}</button></div>
     ${review.note ? `<p>${escapeHTML(review.note)}</p>` : ''}</section>`;
 }
 
@@ -59,11 +169,13 @@ function decideRecord(decision) {
   const record = records.objects.find(item => item.id === state.selected);
   if (!record || !Object.hasOwn(reviewNames, decision)) return;
   drivePlayer?.pause();
+  if (record.inspectionReview?.decision !== decision) recordChange(reviewNames[decision], record);
   record.inspectionReview = {...record.inspectionReview, decision};
+  renderDeck();
   persist(reviewNames[decision] + ' · ' + displayId(record));
   const group = visibleObjects().filter(item => item.routeId === record.routeId && frameById(item.frame));
   const i = group.indexOf(record);
-  const next = [...group.slice(i + 1), ...group.slice(0, i)].find(item => !item.inspectionReview?.decision);
+  const next = [...group.slice(i + 1), ...group.slice(0, i)].find(item => reviewState(item) === 'pending');
   if (next) showRecord(next.id, true);
   else renderSelection();
 }
@@ -88,14 +200,31 @@ function reportRoute() {
   const route = currentSurveyRoute();
   if (!route) return;
   drivePlayer?.pause();
-  const objects = routeRecords(route);
-  $('report-title').textContent = route.name;
-  $('report-body').innerHTML = `<p>Точек: ${objects.length} · Проверено: ${objects.filter(r => r.inspectionReview?.decision).length} · На проверку: ${objects.filter(needsFollowup).length}</p>` +
+  $('problems-only').checked = state.filter === 'retake';
+  updateRouteReport();
+  $('report-dialog').showModal();
+}
+
+function updateRouteReport() {
+  const route = currentSurveyRoute();
+  const issuesOnly = $('problems-only').checked;
+  const stops = orderedStops(route);
+  if (issuesOnly && state.filter === 'retake') stops.push(...retakeStops().filter(r => !r.routeId));
+  const objects = stops.filter(r => !issuesOnly || retakeReason(r) || needsFollowup(r) || ['urgent','review'].includes(priorityOf(r)));
+  $('report-title').textContent = (issuesOnly ? 'Лист выезда · ' : '') + route.name;
+  document.querySelector('[data-action="route-geojson"]').hidden = issuesOnly;
+  $('report-body').innerHTML = `<p>Точек: ${objects.length} · Проверено: ${objects.filter(r => reviewState(r) !== 'pending').length} · На проверку: ${objects.filter(needsFollowup).length}</p>` +
     objects.map(r => {
       const frame = frameById(r.frame);
-      return `<article>${frame ? `<figure class="frame"><img src="${escapeHTML(frame.src)}" alt="">${frame.boxes.map(b => boxHTML(b)).join('')}</figure>` : ''}<div><strong>${escapeHTML(r.type)}</strong><p>${escapeHTML(r.place || formatPoint(r.point))}</p><p>${escapeHTML(reviewNames[r.inspectionReview?.decision] || 'Ожидает проверки')}</p>${r.inspectionReview?.note ? `<p>${escapeHTML(r.inspectionReview.note)}</p>` : ''}</div></article>`;
+      const box = frame?.boxes.find(b => b.id === r.box);
+      const reason = retakeReason(r) || r.issue || (needsFollowup(r) ? 'Требуется проверка' : '');
+      return `<article>${issuesOnly && box ? cropHTML(frame, box) : frame ? `<figure class="frame"><img src="${escapeHTML(frame.src)}" alt="">${frame.boxes.map(b => boxHTML(b)).join('')}</figure>` : ''}<div><strong>${escapeHTML(displayId(r))} · ${escapeHTML(r.type)}</strong>${!r.routeId ? '<p>Вне маршрута</p>' : ''}<p class="stop-address">${escapeHTML(r.place || formatPoint(r.point))}</p><p>${escapeHTML(reviewMarks[reviewState(r)][1])}</p>${issuesOnly && reason ? `<p>${escapeHTML(reason)}</p>` : ''}${r.inspectionReview?.note ? `<p>${escapeHTML(r.inspectionReview.note)}</p>` : ''}</div></article>`;
     }).join('');
-  $('report-dialog').showModal();
+  $('report-body').querySelectorAll('article').forEach((article,index) => {
+    const record = objects[index];
+    if (!record.place && isValidPoint(record.point)) showPointAddress(record, article.querySelector('.stop-address'), formatPoint(record.point));
+  });
+  if (!objects.length) $('report-body').innerHTML = '<p>На этом маршруте нет точек для выезда.</p>';
 }
 
 function exportRouteGeoJSON() {
@@ -115,12 +244,17 @@ function renderRouteSchematic(selected) {
   const routes = (records.routes || []).filter(r => r.points?.length > 1);
   host.hidden = Boolean(inspectionMap) || !routes.length;
   if (host.hidden) return;
-  const points = routes.flatMap(r => r.points);
+  const stops = (state.filter === 'retake' ? retakeStops() : visibleObjects().filter(record => record.origin === 'backend'))
+    .filter(record => isValidPoint(record.point));
+  const points = routes.flatMap(r => r.points).concat(stops.map(record => record.point));
   const west = Math.min(...points.map(p => p[0])), north = Math.max(...points.map(p => p[1]));
   const scale = Math.cos(north * Math.PI / 180);
   const project = ([lon, lat]) => [(lon - west) * scale * 90000, (north - lat) * 90000];
   const extent = points.map(project);
   const width = Math.max(...extent.map(p => p[0])), height = Math.max(...extent.map(p => p[1]));
   host.innerHTML = `<svg viewBox="-50 -50 ${width+100} ${height+100}" fill="none">${routes.map(r =>
-    `<polyline points="${r.points.map(p => project(p).join(',')).join(' ')}" stroke="${r.id === selected?.id ? 'var(--brand)' : '#758a9e'}" stroke-linejoin="round" stroke-width="4" vector-effect="non-scaling-stroke"/>`).join('')}</svg>`;
+    `<polyline points="${r.points.map(p => project(p).join(',')).join(' ')}" stroke="${r.id === selected?.id ? 'var(--brand)' : '#758a9e'}" stroke-linejoin="round" stroke-width="4" vector-effect="non-scaling-stroke"/>`).join('')}${stops.map(record => {
+      const [x,y] = project(record.point);
+      return `<circle cx="${x}" cy="${y}" r="7" fill="var(--brand)" stroke="white" vector-effect="non-scaling-stroke"/>`;
+    }).join('')}</svg>`;
 }

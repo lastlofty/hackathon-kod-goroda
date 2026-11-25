@@ -4,16 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="mgts-dgis-api-key" content="">
-<meta name="mgts-inspection-data" content="./data/inspection.json?v=aef94e305699">
+<meta name="mgts-inspection-data" content="./data/inspection.json?v=92bb539e3951">
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=58e4a25a8f57">
+<link rel="stylesheet" href="./styles.css?v=f276fc24d451">
 <script defer src="./dgis-map.js?v=44d9969c7556"></script>
 <script defer src="./drive.js?v=308d7e01209c"></script>
-<script defer src="./backend-api.js?v=a5a160199ffa"></script>
-<script defer src="./survey.js?v=41a33d94134c"></script>
-<script defer src="./app.js?v=daf7d1d8a92b"></script>
+<script defer src="./backend-api.js?v=1d390725d8f9"></script>
+<script defer src="./inspection-feed.js?v=c4ad73937c93"></script>
+<script defer src="./survey.js?v=4daf0a7f47f2"></script>
+<script defer src="./fieldwork.js?v=007b645e26bb"></script>
+<script defer src="./app.js?v=ed5ae3ebf213"></script>
 </head>
 <body>
 <header class="topbar">
@@ -42,6 +44,7 @@
       <div id="route-schematic" aria-hidden="true" hidden></div>
       <div class="map-controls">
         <div class="map-tools">
+        <button class="button" id="retake-toggle" data-action="retakes" aria-pressed="false">Что переснять</button>
         <button class="button" data-action="fit" id="fit-button" hidden>Весь маршрут</button>
         <button class="button" data-action="pin" id="pin-button" aria-pressed="false" hidden>+ Поставить точку</button>
         <button class="button" type="button" data-action="map-settings" id="map-provider">Подключить карту</button>
@@ -55,21 +58,22 @@
       </div>
     </div>
       <section class="route-deck" aria-label="Просмотр кадров маршрута">
-        <div class="deck-head"><h2>Кадры маршрута</h2><span id="route-count" class="mono"></span></div>
+        <div id="retake-list" hidden></div>
+        <div class="deck-head"><h2>Кадры маршрута</h2><span id="route-count" class="mono" aria-live="polite"></span></div>
         <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
           <button id="drive-play" type="button" class="button">Проезд 3D</button>
           <button id="drive-restart" type="button" class="button icon" aria-label="С начала" title="С начала">↻</button>
           <div class="seek-track"><input id="drive-progress" type="range" min="0" max="1000" value="0" aria-label="Позиция машины на маршруте"><span class="seek-ticks" id="seek-ticks"></span></div>
           <span id="drive-detail" class="mono"></span>
         </div>
-        <div id="route-frames" class="route-frames"></div>
+        <div id="route-frames" class="route-frames" aria-label="Кадры маршрута, переключение стрелками влево и вправо"></div>
       </section>
     </div>
     <aside class="inspector" aria-label="Выбранный объект">
       <div class="inspector-bar">
         <label class="filter-label">Статус
           <select id="priority-filter" aria-label="Фильтр объектов по статусу">
-            <option value="all">Все объекты</option><option value="urgent">Срочно</option><option value="review">На проверку</option><option value="normal">Без замечаний</option><option value="unverified">Не обследовано</option>
+            <option value="all">Все объекты</option><option value="retake">Что переснять</option><option value="urgent">Срочно</option><option value="review">На проверку</option><option value="normal">Без замечаний</option><option value="unverified">Не обследовано</option>
           </select>
         </label>
         <div class="stepper"><button class="button icon" data-action="prev" aria-label="Предыдущий объект">‹</button><span id="position"></span><button class="button icon" data-action="next" aria-label="Следующий объект">›</button></div>
@@ -101,6 +105,7 @@
     <button class="button" data-action="redraw" aria-pressed="false">Перерисовать</button>
     <button class="button" data-action="delete-box">Удалить</button>
     <button class="button" data-action="box-json">JSON рамок</button>
+    <button class="button" id="inference-button" data-action="show-inference" hidden>Результат модели</button>
   </div>
   <div class="edit-body">
     <div class="edit-viewport"><div id="editor-image" class="editor-image"><img id="edit-photo" alt="Снимок для ручной разметки" draggable="false"><div id="edit-boxes"></div></div></div>
@@ -118,13 +123,29 @@
   </div>
   <div class="dialog-foot"><button class="button" data-action="export-boxes">Скачать JSON</button><button class="button primary" data-action="apply-json">Применить к кадру</button></div>
 </dialog>
+<dialog id="inference-dialog" aria-labelledby="inference-title">
+  <div class="dialog-head"><h2 id="inference-title">Результат модели</h2><button class="button icon" data-action="close-inference" aria-label="Закрыть">×</button></div>
+  <pre id="inference-data"></pre>
+</dialog>
 <dialog id="review-note" aria-labelledby="note-title">
   <form id="note-form"><div class="dialog-head"><h2 id="note-title">Отметить проблему</h2><button type="button" class="button icon" data-action="close-note" aria-label="Закрыть">×</button></div>
     <label class="file-field">Что проверить<textarea id="note-text" rows="4" required maxlength="1500"></textarea></label>
     <div class="dialog-foot"><span class="subtle" id="note-object"></span><button class="button primary">Сохранить заметку</button></div>
   </form>
 </dialog>
-<dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-head"><h2 id="report-title">Отчёт по маршруту</h2><button class="button icon" data-action="close-report" aria-label="Закрыть">×</button></div><div id="report-body"></div><div class="dialog-foot"><button class="button" data-action="route-geojson">Скачать GeoJSON</button><button class="button primary" data-action="print-report">Печать / PDF</button></div></dialog>
+<dialog id="compare-dialog" aria-labelledby="compare-title">
+  <div class="dialog-head"><h2 id="compare-title">До / после</h2><button class="button icon" data-action="close-compare" aria-label="Закрыть сравнение">×</button></div>
+  <div class="compare-body">
+    <p id="compare-empty">Для сравнения нужны снимки этой точки за две разные даты.</p>
+    <div id="compare-pair" hidden>
+      <div class="compare-dates"><label>До <select id="compare-before"></select></label><label>После <select id="compare-after"></select></label></div>
+      <div id="compare-stage"><img id="after-image" alt="Поздний снимок"><img id="before-image" alt="Ранний снимок"><input id="compare-range" type="range" min="0" max="100" value="50" aria-label="Граница между снимками"></div>
+    </div>
+    <form id="compare-form"><label>Дата съёмки <input type="date" id="repeat-date" required></label><label>Снимок этой точки <input id="repeat-image" type="file" accept="image/*" required></label><button type="submit" class="button">Добавить снимок</button></form>
+    <p id="compare-message" role="status"></p>
+  </div>
+</dialog>
+<dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-head"><h2 id="report-title">Отчёт по маршруту</h2><button class="button icon" data-action="close-report" aria-label="Закрыть">×</button></div><label class="report-filter"><input type="checkbox" id="problems-only"> Только проблемы</label><div id="report-body"></div><div class="dialog-foot"><button class="button" data-action="route-geojson">Скачать GeoJSON</button><button class="button primary" data-action="print-report">Печать / PDF</button></div></dialog>
 <dialog id="upload-dialog" aria-labelledby="upload-title">
   <form id="upload-form">
     <div class="dialog-head"><h2 id="upload-title">Добавить снимок</h2><button type="button" class="button icon" data-action="close-upload" aria-label="Закрыть загрузку">×</button></div>

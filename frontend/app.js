@@ -11,7 +11,7 @@ let records = {schemaVersion: 1, datasetId: null, coordinateOrder: 'longitude,la
 const state = {view: 'map', selected: records.objects[0]?.id, filter: 'all', overlay: true, pin: false, pinFrame: null, pinBox: null};
 const $ = id => document.getElementById(id);
 const frameById = id => records.frames.find(frame => frame.id === id);
-const visibleObjects = () => records.objects.filter(record =>
+const visibleObjects = () => state.filter === 'retake' ? retakeStops() : records.objects.filter(record =>
   state.filter === 'all' || priorityOf(record) === state.filter
 );
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
@@ -49,7 +49,7 @@ function boxHTML(box, selected = false, editable = false, frameId) {
   const classes = ['box', box.source === 'manual' ? 'manual' : '', selected ? 'selected' : '', box.y < .08 ? 'top' : '', box.x > .67 ? 'right' : ''].join(' ');
   const handles = editable && selected ? ['nw','ne','sw','se'].map(corner => `<i class="box-handle" data-corner="${corner}"></i>`).join('') : '';
   const tag = frameId ? 'button' : 'div';
-  const action = frameId ? `type="button" data-frame="${escapeHTML(frameId)}" aria-label="Править рамку: ${escapeHTML(box.label)}"` : '';
+  const action = frameId ? `type="button" data-focus-frame="${escapeHTML(frameId)}" aria-label="Увеличить рамку: ${escapeHTML(box.label)}"` : '';
   return `<${tag} ${action} class="${classes}" data-box-id="${escapeHTML(box.id)}" style="--x:${box.x};--y:${box.y};--w:${box.w};--h:${box.h}"><span class="tag">${escapeHTML(box.label)}</span>${handles}</${tag}>`;
 }
 
@@ -95,7 +95,7 @@ async function lookupPointAddress([lon, lat]) {
   return item?.full_name || item?.address_name || '';
 }
 
-async function showPointAddress(record, field) {
+async function showPointAddress(record, field, fallback) {
   if (!isValidPoint(record.point)) {
     field.textContent = 'Точка не задана';
     return;
@@ -114,16 +114,18 @@ async function showPointAddress(record, field) {
   }
   try {
     const address = await pointAddresses.get(key);
-    field.textContent = address || 'Адрес для этой точки не найден';
+    field.textContent = address || fallback || 'Адрес для этой точки не найден';
   } catch {
-    field.textContent = 'Адрес недоступен. Проверьте подключение к службе поиска адресов.';
+    field.textContent = fallback || 'Адрес недоступен. Проверьте подключение к службе поиска адресов.';
   }
 }
 
 function renderSelection() {
   const visible = visibleObjects();
   const record = visible.find(item => item.id === state.selected) || visible[0];
-  state.selected = record?.id;
+  if (state.focusRecord !== record?.id) state.focusBox = null;
+  state.focusRecord = state.selected = record?.id;
+  renderRetakes();
   for (const shot of $('route-frames').children) {
     if (!shot.dataset.shot) continue;
     const selected = shot.dataset.shot === record?.id;
@@ -139,7 +141,7 @@ function renderSelection() {
   $('position').textContent = record ? `${index + 1} / ${visible.length}` : '0 / 0';
   document.querySelectorAll('[data-action="prev"],[data-action="next"]').forEach(button => { button.disabled = visible.length < 2; });
   if (!record) {
-    $('inspector-content').innerHTML = '<p class="empty">По фильтру ничего не найдено.</p>';
+    $('inspector-content').innerHTML = '<p class="empty">Нет объектов по выбранному фильтру.</p>';
     renderMarkers();
     return;
   }
@@ -147,11 +149,12 @@ function renderSelection() {
   const box = frame?.boxes.find(item => item.id === record.box);
   const point = formatPoint(record.point);
   const sources = [sourceLink(record.source, 'Источник координат'), sourceLink(frame?.source, 'Источник снимка')].filter(Boolean);
+  const focused = frame?.boxes.find(item => item.id === state.focusBox);
   const figure = frame ? `<div class="frame-panel">
-    <figure class="frame"><div class="frame-bounds"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => item.source === 'manual' && item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</div></figure>
-    <div class="frame-tools"><div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div><button class="button" data-frame="${escapeHTML(frame.id)}">Править рамки ↗</button></div>
+    <figure class="frame">${focused ? cropHTML(frame, focused) : `<div class="frame-bounds"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => (frame.backend || item.source === 'manual') && item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</div>`}</figure>
+    <div class="frame-tools">${focused ? '<button class="button" data-action="full-frame">Весь кадр</button>' : `<div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div>`}<button class="button" title="Править рамки (E)" aria-keyshortcuts="E" data-frame="${escapeHTML(frame.id)}">Править рамки ↗</button></div>
   </div>` : '<p class="empty">К этому объекту кадр не привязан.</p>';
-  $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span>${status(record)}</div><h2>${escapeHTML(record.type)}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
+  $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span><button class="table-link compare-link" data-action="compare">До / после</button>${status(record)}</div><h2>${escapeHTML(record.type)}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
     ${figure}${frame ? reviewControls(record) : ''}<div class="record-data"><dl><div><dt>Признак</dt><dd>${escapeHTML(record.issue ?? 'Нет данных о состоянии')}</dd></div>
     <div><dt>Уверенность модели</dt><dd>${!frame?.demo && Number.isFinite(record.confidence) ? record.confidence + '%' : '—'}</dd></div>
     <div><dt>Адрес точки</dt><dd id="point-address" aria-live="polite"></dd></div>
@@ -160,7 +163,7 @@ function renderSelection() {
     <div><dt>Съёмка</dt><dd>${escapeHTML(frame?.time || '—')}</dd></div></dl>
     ${frame?.note ? `<p class="subtle">${escapeHTML(frame.note)}</p>` : ''}
     <div class="point-tools"><button class="button" data-action="move-point">${isValidPoint(record.point) ? 'Переместить точку' : 'Поставить на карту'}</button>
-    ${isValidPoint(record.point) ? '<button class="button" data-action="delete-point">Удалить точку</button>' : ''}</div>
+    ${isValidPoint(record.point) ? '<button class="button" data-action="delete-point">Удалить точку</button>' : ''}<button class="button" data-action="share-record">Скопировать ссылку</button></div>
     ${frame || sources.length ? `<div class="record-foot">${frame ? `<span class="mono">${escapeHTML(frame.name)}</span>` : ''}${sources.join(' ')} </div>` : ''}</div>`;
   showPointAddress(record, $('point-address'));
   renderMarkers();
@@ -181,7 +184,7 @@ function renderList() {
     return;
   }
   const rows = records.frames.map(frame => `<tr><td><span class="file-cell"><img src="${escapeHTML(frame.src)}" alt="">${escapeHTML(frame.name)}</span></td><td class="mono">${escapeHTML(frame.time)}</td><td>${frame.boxes.length}</td><td>${records.objects.filter(record => record.frame === frame.id).length}</td><td><button class="table-link" data-frame="${escapeHTML(frame.id)}">Открыть кадр ↗</button></td><td><button class="table-link" data-place="${escapeHTML(frame.id)}">Поставить точку</button></td></tr>`).join('');
-  $('list-view').innerHTML = `<div class="table-shell"><table><thead><tr><th>Снимок</th><th>Дата</th><th>Рамки</th><th>Точки</th><th>Разметка</th><th>Местоположение</th></tr></thead><tbody>${rows}</tbody></table></div><p style="margin-top:9px">${exportButton}</p>`;
+  $('list-view').innerHTML = `${historyLog()}<h2 class="history-frames">Снимки</h2><div class="table-shell"><table><thead><tr><th>Снимок</th><th>Дата</th><th>Рамки</th><th>Точки</th><th>Разметка</th><th>Местоположение</th></tr></thead><tbody>${rows}</tbody></table></div><p style="margin-top:9px">${exportButton}</p>`;
 }
 
 function switchView(view) {
@@ -327,10 +330,12 @@ function activateRoute(choice, focus = true) {
   $('route-select').value = choice.id;
   renderDeck();
   drivePlayer = createDrivePlayer(inspectionMap, choice, resetPin, showNearestDrivePoint);
+  if (!focus && state.filter === 'retake') renderSelection();
   if (focus) {
     resetPin();
     const first = visibleObjects().find(record => record.routeId === choice.id && isValidPoint(record.point));
     if (first) showRecord(first.id);
+    else renderSelection();
     inspectionMap.fitPoints(choice.points);
   }
 }
@@ -342,6 +347,7 @@ $('route-select').addEventListener('change', event => {
     renderDeck();
     const first = routeRecords(currentSurveyRoute()).find(record => visibleObjects().includes(record));
     if (first) showRecord(first.id);
+    else renderSelection();
   }
 });
 
@@ -365,7 +371,7 @@ async function startMap() {
           return choice.points?.length > 1 && choice.points.every(isValidPoint) ? choice : null;
         }
       }))).filter(Boolean);
-      drivingRoute = drivingRoutes[0];
+      drivingRoute = drivingRoutes.find(choice => choice.id === $('route-select').value) || drivingRoutes[0];
       routeUnavailable = !drivingRoute;
     }
     inspectionMap = await initDgisMap({
@@ -386,9 +392,13 @@ async function startMap() {
       onPoint: point => { if (state.pin) addPoint(point); }
     });
     if (drivingRoute) {
+      drivingRoute = drivingRoutes.find(choice => choice.id === $('route-select').value) || drivingRoute;
       $('route-select').replaceChildren(...drivingRoutes.map(choice => new Option(choice.name, choice.id)));
       $('route-picker').hidden = drivingRoutes.length < 2;
       activateRoute(drivingRoute, false);
+      const linkedId = new URLSearchParams(location.hash.slice(1)).get('point');
+      const selected = records.objects.find(record => record.id === state.selected);
+      if (selected && selected.id === linkedId && isValidPoint(selected.point)) inspectionMap.panTo(selected.point);
     }
   } catch (error) {
     mapError = error instanceof DgisMapError ? error.code : 'render';
@@ -434,6 +444,7 @@ function addPoint([longitude, latitude]) {
     const record = records.objects.find(item => item.id === state.moveId);
     resetPin();
     if (record) {
+      recordChange(isValidPoint(record.point) ? 'Точка перемещена' : 'Точка поставлена на карту', record);
       setOperatorPoint(record, coordinates);
       showRecord(record.id);
       renderDeck();
@@ -444,11 +455,13 @@ function addPoint([longitude, latitude]) {
   const frame = frameById(state.pinFrame);
   const box = frame?.boxes.find(item => item.id === state.pinBox) || frame?.boxes[0];
   const id = 'РУЧ-' + newId().slice(0,6).toUpperCase();
-  records.objects.push({id, type: box?.label || 'Ручная отметка', issue:'Назначено на ручную проверку', priority:'review', place:'', origin:'manual', frame:frame?.id, box:box?.id, point:coordinates, pointKind:'manual'});
+  records.objects.push({id, type: box?.label || 'Ручная отметка', issue:'Назначено на ручную проверку', priority:'review', place:'', origin:'manual', routeId:currentSurveyRoute()?.id, frame:frame?.id, box:box?.id, point:coordinates, pointKind:'manual'});
   resetPin();
   state.filter = $('priority-filter').value = 'all';
   showRecord(id);
   renderTotals();
+  renderDeck();
+  recordChange('Точка добавлена', records.objects.at(-1));
   persist('Точка добавлена в реестр.');
 }
 
@@ -467,6 +480,7 @@ function deletePoint() {
   const question = manual ? 'Удалить ручную отметку из карты и реестра?' : 'Удалить точку с карты? Карточка объекта и рамки останутся в реестре.';
   if (!window.confirm(displayId(record) + ' · ' + question)) return;
   resetPin();
+  recordChange('Точка удалена', record);
   if (manual) records.objects = records.objects.filter(item => item !== record);
   else setOperatorPoint(record, null);
   renderSelection();
@@ -489,6 +503,7 @@ function openEditor(id, preferredBox) {
   $('editor-filename').textContent = `Кадр ${index + 1} из ${records.frames.length} · ${frame.name}`;
   $('next-frame').disabled = index === records.frames.length - 1;
   $('edit-photo').src = frame.src;
+  $('inference-button').hidden = !Array.isArray(frame.inference);
   renderEditor();
   if (!$('annotator').open) $('annotator').showModal();
 }
@@ -685,8 +700,24 @@ function updateBoxReference(record, frame) {
 
 function saveBoxes() {
   const frame = editor.frame;
+  const previous = new Map(frame.boxes.map(box => [box.id, JSON.stringify(box)]));
+  const changedIds = new Set(frame.boxes.filter(box => !editor.boxes.some(item => item.id === box.id)).map(box => box.id));
+  for (const box of editor.boxes) {
+    if (previous.get(box.id) !== JSON.stringify(box)) changedIds.add(box.id);
+  }
+  if (changedIds.size) {
+    const linked = records.objects.filter(record => record.frame === frame.id);
+    const affected = linked.filter(record => changedIds.has(record.box));
+    for (const record of affected) recordChange('Изменены рамки кадра', record, frame);
+    if (!affected.length) recordChange('Изменены рамки кадра', linked.length === 1 ? linked[0] : null, frame);
+  }
   frame.boxes = editor.boxes;
-  if (frame.backend) frame.localEdits = true;
+  if (frame.backend && changedIds.size) {
+    if (!frame.localEdits || frame.editedBoxIds) {
+      frame.editedBoxIds = [...new Set([...(frame.editedBoxIds || []), ...changedIds])];
+    }
+    frame.localEdits = true;
+  }
   for (const record of records.objects) {
     if (record.frame === frame.id && record.box) updateBoxReference(record, frame);
   }
@@ -779,21 +810,31 @@ $('note-form').addEventListener('submit', event => {
   const note = $('note-text').value.trim();
   if (!note || !noteTarget) return;
   const {record, routeId, carPoint} = noteTarget;
+  if (note !== record.inspectionReview?.note) recordChange(record.inspectionReview?.note ? 'Изменена заметка' : 'Отмечена проблема', record);
   record.inspectionReview = {...record.inspectionReview, note, routeId, carPoint, frame:record.frame};
+  renderDeck();
   $('review-note').close();
   renderSelection();
   persist('Заметка сохранена в этом браузере.');
 });
 
 const actions = {
-  note: openReviewNote, 'close-note': () => $('review-note').close(),
+  retakes: () => changePointFilter(state.filter === 'retake' ? 'all' : 'retake'),
+  compare: openComparison, 'close-compare': () => $('compare-dialog').close(),
+  'full-frame': () => { state.focusBox = null; renderSelection(); },
+  'share-record': copyRecordLink, note: openReviewNote, 'close-note': () => $('review-note').close(),
   queue: () => { queueOnly = !queueOnly; renderList(); },
   'route-report': reportRoute, 'close-report': () => $('report-dialog').close(),
-  'route-geojson': exportRouteGeoJSON, 'print-report': () => window.print(),
+  'route-geojson': exportRouteGeoJSON, 'print-report': async () => {
+    const images = $('report-body').querySelectorAll('img, survey-crop');
+    await Promise.allSettled([...images].map(image => image.ready || image.decode?.()));
+    if ($('report-dialog').open) window.print();
+  },
   fit: () => {
     drivePlayer?.exit();
-    const route = drivingRoutes.length > 1 ? drivingRoutes.flatMap(choice => choice.points) : displayedRoute();
-    inspectionMap?.fitPoints(route.length > 1 ? route : records.objects.map(record => record.point).filter(isValidPoint));
+    const route = state.filter === 'retake' ? retakeStops().map(r => r.point).filter(isValidPoint) : drivingRoutes.length > 1 ? drivingRoutes.flatMap(choice => choice.points) : displayedRoute();
+    if (route.length === 1) inspectionMap?.panTo(route[0]);
+    else if (route.length || state.filter !== 'retake') inspectionMap?.fitPoints(route.length ? route : records.objects.map(record => record.point).filter(isValidPoint));
   },
   pin: () => state.pin ? resetPin() : startPin(), prev: () => step(-1), next: () => step(1),
   'map-settings': openMapSettings,
@@ -815,6 +856,11 @@ const actions = {
   'move-point': () => startPin(null, null, state.selected),
   'delete-point': deletePoint,
   'box-json': openBoxJSON,
+  'show-inference': () => {
+    $('inference-data').textContent = JSON.stringify(editor.frame.inference, null, 2);
+    $('inference-dialog').showModal();
+  },
+  'close-inference': () => $('inference-dialog').close(),
   'close-json': () => $('box-json-dialog').close(),
   'apply-json': applyBoxJSON,
   'export-boxes': () => {
@@ -835,9 +881,16 @@ document.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
   const data = button.dataset;
+  if (data.focusFrame) {
+    drivePlayer?.pause();
+    state.focusBox = data.boxId;
+    renderSelection();
+    document.querySelector('[data-action="full-frame"]')?.focus({preventScroll:true});
+  }
+  if (data.retake) showRecord(data.retake, true);
   if (data.decision) decideRecord(data.decision);
   if (data.shot) {
-    if (!visibleObjects().some(r => r.id === data.shot)) state.filter = $('priority-filter').value = 'all';
+    if (!visibleObjects().some(r => r.id === data.shot)) changePointFilter('all');
     if (drivePlayer) {
       $('drive-progress').value = Math.round(Number(data.fraction) * 1000);
       $('drive-progress').dispatchEvent(new Event('input'));
@@ -853,14 +906,12 @@ document.addEventListener('click', event => {
     switchView('map');
     showRecord(data.editorRecord, true);
   }
-  if (data.record) {
-    if (state.view !== 'map') {
-      state.filter = $('priority-filter').value = 'all';
-      switchView('map');
-    }
-    showRecord(data.record, true);
+  if (data.record && state.filter === 'retake' && state.view === 'map') showRecord(data.record);
+  else if (data.record) {
+    const record = records.objects.find(item => item.id === data.record);
+    if (record) openSurveyRecord(record);
   }
-  if (data.frame) openEditor(data.frame, data.boxId ?? records.objects.find(item => item.id === state.selected && item.frame === data.frame)?.box);
+  if (data.frame) openEditor(data.frame, data.boxId ?? state.focusBox ?? records.objects.find(item => item.id === state.selected && item.frame === data.frame)?.box);
   if (data.place) startPin(data.place);
   if (data.box) {
     selectEditorBox(data.box);
@@ -868,13 +919,21 @@ document.addEventListener('click', event => {
     [...$('boxes-list').querySelectorAll('button')].find(item => item.dataset.box === data.box)?.focus({preventScroll:true});
   }
 });
-$('priority-filter').addEventListener('change', event => { state.filter = event.target.value; renderSelection(); });
+$('priority-filter').addEventListener('change', event => { changePointFilter(event.target.value); });
 $('map-settings-form').addEventListener('submit', event => {
   event.preventDefault();
   const key = $('map-key-input').value.trim();
   if (key) changeMapKey(key);
   else $('map-settings-note').textContent = 'Введите ключ Map Tiles API.';
 });
+document.addEventListener('change', event => {
+  if (event.target.id === 'history-object') {
+    historyObject = event.target.value;
+    renderList();
+    $('history-object').focus();
+  }
+});
+document.addEventListener('keydown', reviewShortcut);
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && state.pin) resetPin(); });
 function savedInspection() {
   try {
@@ -903,7 +962,8 @@ function mergeInspection(dataset, saved) {
       }
       return merged;
     });
-    return {...dataset, frames, objects:objects.concat([...missing.values()])};
+    const comparisonPhotos = [...(dataset.comparisonPhotos || []), ...(saved.comparisonPhotos || []).filter(photo => photo.local)];
+    return {...dataset, frames, comparisonPhotos, objects:objects.concat([...missing.values()]), changes:Array.isArray(saved.changes) ? saved.changes : []};
   }
 
   const demoFrames = new Map(dataset.frames.filter(frame => frame.demo).map(frame => [frame.id, frame]));
@@ -916,6 +976,46 @@ function mergeInspection(dataset, saved) {
   const manual = saved.objects.filter(record => record.origin === 'manual');
   return {...dataset, frames, objects: [...dataset.objects, ...manual]};
 }
+
+function applyBackendInspection(backend) {
+  const selectedFrame = records.objects.find(record => record.id === state.selected)?.frame;
+  const editedFrames = new Map(records.frames.filter(frame => frame.backend && frame.localEdits).map(frame => [frame.id, frame]));
+  records.frames = [...backend.frames.map(frame => {
+    const edited = editedFrames.get(frame.id);
+    if (!edited) return frame;
+    const overrides = new Set(edited.editedBoxIds);
+    const boxes = edited.editedBoxIds ? frame.boxes.filter(box => !overrides.has(box.id))
+      .concat(edited.boxes.filter(box => overrides.has(box.id))) : edited.boxes;
+    return {...frame, boxes, localEdits: true, editedBoxIds: edited.editedBoxIds};
+  }), ...records.frames.filter(frame => !frame.backend)];
+  const savedObjects = new Map(records.objects.filter(item => item.origin === 'backend').map(item => [item.id, item]));
+  for (const record of backend.objects) {
+    const saved = savedObjects.get(record.id);
+    if (saved?.inspectionReview) record.inspectionReview = saved.inspectionReview;
+    if (saved?.pointEdited) setOperatorPoint(record, saved.point);
+    const frame = frameById(record.frame);
+    if (frame?.localEdits && record.box) updateBoxReference(record, frame);
+  }
+  records.objects = [...backend.objects, ...records.objects.filter(record => record.origin !== 'backend')];
+  if (selectedFrame && !records.objects.some(record => record.id === state.selected)) {
+    state.selected = records.objects.find(record => record.frame === selectedFrame)?.id;
+  }
+}
+
+let pendingInspection;
+
+function flushInspection() {
+  if (!pendingInspection || document.querySelector('dialog[open]')) return;
+  applyBackendInspection(pendingInspection);
+  pendingInspection = null;
+  backendConnected = true;
+  renderDeck();
+  renderTotals();
+  renderSelection();
+  if (state.view !== 'map') renderList();
+}
+
+document.querySelectorAll('dialog').forEach(dialog => dialog.addEventListener('close', flushInspection));
 
 async function loadInspection() {
   try {
@@ -934,20 +1034,7 @@ async function loadInspection() {
   }
   try {
     const backend = await loadBackendInspection();
-    const editedFrames = new Map(records.frames.filter(frame => frame.backend && frame.localEdits).map(frame => [frame.id, frame]));
-    records.frames = [...backend.frames.map(frame => {
-      const edited = editedFrames.get(frame.id);
-      return edited ? {...frame, boxes: edited.boxes, localEdits: true} : frame;
-    }), ...records.frames.filter(frame => !frame.backend)];
-    const savedObjects = new Map(records.objects.filter(item => item.origin === 'backend').map(item => [item.id, item]));
-    for (const record of backend.objects) {
-      const saved = savedObjects.get(record.id);
-      if (saved?.inspectionReview) record.inspectionReview = saved.inspectionReview;
-      if (saved?.pointEdited) setOperatorPoint(record, saved.point);
-      const frame = frameById(record.frame);
-      if (frame?.localEdits && record.box) updateBoxReference(record, frame);
-    }
-    records.objects = [...backend.objects, ...records.objects.filter(record => record.origin !== 'backend')];
+    applyBackendInspection(backend);
     backendConnected = true;
   } catch {
     backendConnected = false;
@@ -960,7 +1047,14 @@ async function loadInspection() {
   renderTotals();
   renderSelection();
   if (state.view !== 'map') renderList();
+  openRecordLink();
+  window.addEventListener('hashchange', openRecordLink);
   startMap();
+  if (inspectionCache || !backendConnected) startInspectionStream(backend => {
+    pendingInspection = backend;
+    flushInspection();
+  });
 }
 
+bindFieldwork();
 loadInspection();

@@ -57,7 +57,7 @@ function backendFrame(media) {
   return {
     id: media.id, name: media.original_filename || 'Снимок ' + media.id.slice(0, 8), src: src.href,
     time: Number.isFinite(date.getTime()) ? backendDate.format(date) : '—',
-    backend: true, demo: media.source === 'demo', boxes: []
+    capturedOn: media.captured_at?.slice(0,10), backend: true, demo: media.source === 'demo', boxes: []
   };
 }
 
@@ -98,13 +98,17 @@ async function backendBox(finding, frame, label, sizes) {
     source: finding.source === 'manual' ? 'manual' : frame.demo ? 'demo' : 'model'};
 }
 
-async function loadBackendInspection() {
+async function loadLegacyInspection() {
   workspaceId = await findWorkspace();
   if (!workspaceId) return {frames: [], objects: []};
   const filters = {workspace_id: workspaceId};
   const [types, entities, media, findings] = await Promise.all(
     ['entity-types', 'entities', 'media', 'findings'].map(resource => backendList(resource, filters))
   );
+  return buildBackendInspection(types, entities, media, findings);
+}
+
+async function buildBackendInspection(types, entities, media, findings) {
   const frames = media.filter(item => item.content_type?.startsWith('image/') ||
     ['image', 'photo', 'frame'].includes(item.kind)).map(backendFrame).filter(Boolean);
   const frameById = new Map(frames.map(frame => [frame.id, frame]));
@@ -112,8 +116,15 @@ async function loadBackendInspection() {
   const entityById = new Map(entities.map(entity => [entity.id, entity]));
   const typeNames = new Map(types.map(type => [type.id, type.name]));
   const latest = new Map();
+  const captures = new Map();
   const sizes = new Map();
+  for (const frame of frames) frame.inference = [];
   for (const finding of findings) {
+    frameById.get(finding.media_id)?.inference.push(finding);
+    if (finding.entity_id && frameById.has(finding.media_id)) {
+      if (!captures.has(finding.entity_id)) captures.set(finding.entity_id, new Set());
+      captures.get(finding.entity_id).add(finding.media_id);
+    }
     if (finding.entity_id && !latest.has(finding.entity_id)) latest.set(finding.entity_id, finding);
   }
   function label(entity, finding) {
@@ -121,7 +132,7 @@ async function loadBackendInspection() {
   }
   const boxes = await Promise.all(findings.map(finding => {
     const frame = frameById.get(finding.media_id);
-    if (frame) return backendBox(finding, frame, label(entityById.get(finding.entity_id), finding), sizes);
+    if (frame) return backendBox(finding, frame, finding.label || label(entityById.get(finding.entity_id), finding), sizes);
   }));
   boxes.forEach((box, index) => {
     if (!box) return;
@@ -144,15 +155,29 @@ async function loadBackendInspection() {
       priority: findingPriorities[finding?.status] || 'unverified',
       confidence: finding?.score != null ? Math.round(finding.score * 100) : null,
       recommendation: finding?.recommendation, reviewed: finding?.reviewed, severity: finding?.severity,
-      place: entity?.attributes?.address, point: point || backendPoint(mediaById.get(finding?.media_id)),
-      pointKind: point ? 'asset' : 'observation', frame: frame?.id,
+      routeId: entity?.attributes?.route_id || mediaById.get(finding?.media_id)?.attributes?.route_id,
+      place: entity?.attributes?.address || mediaById.get(finding?.media_id)?.attributes?.address, point: point || backendPoint(mediaById.get(finding?.media_id)),
+      pointKind: point ? 'asset' : 'observation', frame: frame?.id, captureFrames:[...(captures.get(id) || [])],
       box: frame?.boxes.find(box => box.id === finding.id)?.id, origin: 'backend'
     };
   }
-  return {frames, objects: [
+  const objects = [
     ...entities.map(entity => objectRecord(entity, latest.get(entity.id))),
     ...findings.filter(finding => !finding.entity_id).map(finding => objectRecord(null, finding))
-  ]};
+  ];
+  const mappedFrames = new Set(objects.filter(record => {
+    const gps = backendPoint(mediaById.get(record.frame));
+    return gps && record.point?.[0] === gps[0] && record.point?.[1] === gps[1];
+  }).map(record => record.frame));
+  for (const frame of frames) {
+    const media = mediaById.get(frame.id);
+    const point = backendPoint(media);
+    if (!point || mappedFrames.has(frame.id)) continue;
+    objects.push({id: 'media:' + frame.id, displayId: frame.id.slice(0, 8), frame: frame.id, type: 'Кадр проезда',
+      priority: 'unverified', origin: 'backend', point, pointKind: 'observation',
+      routeId: media.attributes?.route_id, place: media.attributes?.address});
+  }
+  return {frames, objects};
 }
 
 async function uploadBackendPhoto(file) {
