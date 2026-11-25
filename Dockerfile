@@ -10,7 +10,7 @@ RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m pip install --no-cache-dir --upgrade "pip>=26.2.0" \
+RUN python -m pip install --no-cache-dir --upgrade "pip>=26.2.0" "setuptools==84.1.0" \
     && python -m pip install --no-cache-dir -r requirements.txt
 
 COPY . .
