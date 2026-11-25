@@ -6,9 +6,11 @@ from sqlalchemy import select
 
 from app.api.deps import DbSession
 from app.api.utils import apply_patch, commit, get_or_404
+from app.core.config import get_settings
 from app.models.job import ProcessingJob
 from app.models.media import Media
 from app.schemas.job import JobCreate, JobRead, JobUpdate
+from app.services.inference import run_job
 from app.services.references import ensure_in_workspace, ensure_workspace
 
 router = APIRouter(prefix="/jobs", tags=["processing jobs"])
@@ -67,3 +69,8 @@ def delete_job(job_id: UUID, db: DbSession) -> Response:
     db.delete(job)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{job_id}/run", response_model=JobRead)
+def execute_job(job_id: UUID, db: DbSession) -> ProcessingJob:
+    return run_job(db, job_id, get_settings())

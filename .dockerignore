@@ -13,3 +13,13 @@ uploads/*
 !uploads/.gitkeep
 frontend/
 mgts-mockups.html
+
+.env.*
+triton/
+*.onnx
+*.pt
+*.pth
+*.engine
+*.plan
+*.safetensors
+*.ckpt

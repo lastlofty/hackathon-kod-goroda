@@ -1,0 +1,22 @@
+# Linux NVIDIA GPU only. Do not use this override on Apple Silicon.
+services:
+  backend:
+    environment:
+      INFERENCE_MODE: triton
+      TRITON_URL: http://triton:8000
+  triton:
+    image: ${TRITON_IMAGE:-nvcr.io/nvidia/tritonserver:25.06-py3}
+    command: ["tritonserver", "--model-repository=/models", "--strict-readiness=true"]
+    volumes:
+      - ./triton/model_repository:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    shm_size: 1gb
+    networks:
+      - backend-net
+    # No host ports; backend uses Docker DNS.
