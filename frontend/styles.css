@@ -379,3 +379,20 @@ button.path-shape .path-ink,.editor-image[data-mode="edit"] .path-ink { pointer-
 .overview-empty { padding:16px; color:var(--muted) }
 @media(max-width:840px) { .overview-grid { grid-template-columns:1fr } .overview-head { flex-wrap:wrap } }
 @media(max-width:480px) { .overview-head { display:grid; gap:12px } .overview-metrics { padding:0; border:0 } .overview-route-heading button { font-size:13px } .overview-queue button { grid-template-columns:47px minmax(0,1fr) } .overview-priority { grid-column:2; text-align:left } }
+
+.overview-section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-right:14px }
+.overview-section-head .button { margin-block:6px; flex-shrink:0 }
+#retake-layer[aria-pressed="true"] { background:var(--brand); color:var(--base) }
+#retake-task-panel { padding:12px 18px; border-bottom:1px solid var(--line) }
+#retake-task-panel:not([hidden]) { display:grid; gap:8px }
+#retake-task-panel select { width:100%; min-width:0 }
+.retake-pin { width:21px; height:21px; padding:0; border-radius:4px; background:#ffab81; border:2px solid #24190f; color:#24190f; font-weight:800; cursor:pointer }
+#finding-dialog { max-width:720px }
+#finding-count { margin-left:auto; color:var(--muted) }
+#finding-content { padding:14px }
+#finding-content survey-crop { min-height:180px }
+#finding-content canvas,#finding-content img { max-height:48vh; object-fit:contain }
+.finding-meta { display:grid; gap:4px; padding-top:12px }
+.finding-meta small { color:var(--muted) }
+#finding-actions { flex-wrap:wrap }
+#finding-actions kbd { margin-left:4px; opacity:.8 }

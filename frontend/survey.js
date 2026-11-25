@@ -137,14 +137,17 @@ function fractionAlongRoute(point, path) {
   return length ? offset / length : 0;
 }
 
-function renderDeck() {
-  buildClassFilters();
-  syncLiveSelection();
-  const route = currentSurveyRoute();
-  renderLiveStatus();
+function routeCapturePositions(route, onlyLive = false) {
   const frames = new Map(records.frames.map(frame => [frame.id, frame]));
   const positions = new Map();
   const captures = new Map();
+  if (route) {
+    for (const frame of records.frames) {
+      if (frame.routeId === route.id && isValidPoint(frame.cameraPoint) && (!onlyLive || isLiveFrame(frame))) {
+        captures.set(frame.id, {fraction:fractionAlongRoute(frame.cameraPoint, route.points || [])});
+      }
+    }
+  }
   for (const record of routeRecords(route)) {
     const frame = frames.get(record.frame);
     if (!frame) continue;
@@ -152,11 +155,20 @@ function renderDeck() {
     if (!isValidPoint(point)) continue;
     const fraction = fractionAlongRoute(point, route.points || []);
     positions.set(record.id, fraction);
-    if ((!liveSurvey.active || isLiveFrame(frame)) && (isValidPoint(frame.cameraPoint) || record.pointKind === 'observation')) {
+    if ((!onlyLive || isLiveFrame(frame)) && (isValidPoint(frame.cameraPoint) || record.pointKind === 'observation')) {
       captures.set(frame.id, {fraction});
     }
   }
-  routeCoverage(route, [...captures.values()]);
+  return {frames, positions, captures:[...captures.values()]};
+}
+
+function renderDeck() {
+  buildClassFilters();
+  syncLiveSelection();
+  const route = currentSurveyRoute();
+  renderLiveStatus();
+  const {frames, positions, captures} = routeCapturePositions(route, liveSurvey.active);
+  routeCoverage(route, captures);
   const shots = [];
   const used = new Set();
   for (const record of visibleObjects()) {

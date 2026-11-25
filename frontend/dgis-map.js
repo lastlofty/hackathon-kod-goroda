@@ -132,7 +132,7 @@ function waitForDgisTiles(map) {
 
 // Keep the driving line in the same screen plane as the car marker. Insert it
 // between the map canvas and the HTML markers so the car stays on top.
-function drawRouteLine(map, route, color) {
+function drawRouteLine(map, route, color, dashed = false) {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden';
@@ -154,6 +154,10 @@ function drawRouteLine(map, route, color) {
   if (color) {
     lines[1].setAttribute('stroke', color);
     lines[1].setAttribute('stroke-width', '7');
+  }
+
+  if (dashed) {
+    for (const stroke of lines.slice(0,2)) stroke.setAttribute('stroke-dasharray','8 10');
   }
 
   function draw() {

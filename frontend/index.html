@@ -8,21 +8,23 @@
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=1e6bea9180b0">
-<script defer src="./dgis-map.js?v=5f0dde4c4b7d"></script>
+<link rel="stylesheet" href="./styles.css?v=f538b2587a28">
+<script defer src="./dgis-map.js?v=b865a7924945"></script>
 <script defer src="./drive.js?v=308d7e01209c"></script>
 <script defer src="./backend-api.js?v=4a45d03e5f93"></script>
 <script defer src="./inspection-feed.js?v=d09171e2deb6"></script>
-<script defer src="./survey.js?v=db1e29ec3885"></script>
+<script defer src="./survey.js?v=57350d97e7a8"></script>
 <script defer src="./fieldwork.js?v=c731c3244cd2"></script>
 <script defer src="./live-survey.js?v=2fd92c219ad3"></script>
 <script defer src="./vendor/fflate-0.8.2.js"></script>
 <script defer src="./image-trace.js?v=a0b0a63a0c99"></script>
 <script defer src="./annotation-path.js?v=2ae6ed67ca47"></script>
 <script defer src="./route-atlas.js?v=ad36c35f094d"></script>
-<script defer src="./crew.js?v=448a25b70659"></script>
-<script defer src="./overview.js?v=ae8de2930409"></script>
-<script defer src="./app.js?v=c0eec7b299f1"></script>
+<script defer src="./crew.js?v=96a87b6e4776"></script>
+<script defer src="./finding-queue.js?v=04308928bbc3"></script>
+<script defer src="./overview-retakes.js?v=683f619aea6a"></script>
+<script defer src="./overview.js?v=85404f1766f2"></script>
+<script defer src="./app.js?v=89972faaeddb"></script>
 </head>
 <body>
 <header class="topbar">
@@ -109,6 +111,14 @@
   <section id="overview-content" class="overview" hidden aria-label="Обзор обследований"></section>
   <section id="list-view" class="list-view" hidden aria-label="Список записей"></section>
 </main>
+<dialog id="finding-dialog" aria-labelledby="finding-title">
+  <div class="dialog-head"><h2 id="finding-title">Проверка рамок</h2><span id="finding-count" aria-live="polite"></span>
+    <form method="dialog"><button class="button icon" aria-label="Закрыть проверку">×</button></form></div>
+  <div id="finding-content"></div>
+  <div class="dialog-foot" id="finding-actions"><button class="button primary" data-finding-action="accepted">Верно <kbd>A</kbd></button>
+    <button class="button" data-finding-action="edit">Править <kbd>E</kbd></button>
+    <button class="button" data-finding-action="rejected">Ложное обнаружение <kbd>R</kbd></button></div>
+</dialog>
 <dialog id="annotator" aria-labelledby="edit-title">
   <div class="dialog-head">
     <div><h2 id="edit-title">Разметка кадра</h2><p id="editor-filename" class="subtle mono"></p></div>

@@ -1203,7 +1203,7 @@ function mergeInspection(dataset, saved) {
       return merged;
     });
     const comparisonPhotos = [...(dataset.comparisonPhotos || []), ...(saved.comparisonPhotos || []).filter(photo => photo.local)];
-    return {...dataset, frames, comparisonPhotos, boxReviews:saved.boxReviews || {}, objects:objects.concat([...missing.values()]), changes:Array.isArray(saved.changes) ? saved.changes : []};
+    return {...dataset, frames, comparisonPhotos, retakeTask:Array.isArray(saved.retakeTask) ? saved.retakeTask : [], boxReviews:saved.boxReviews || {}, objects:objects.concat([...missing.values()]), changes:Array.isArray(saved.changes) ? saved.changes : []};
   }
 
   const demoFrames = new Map(dataset.frames.filter(frame => frame.demo).map(frame => [frame.id, frame]));

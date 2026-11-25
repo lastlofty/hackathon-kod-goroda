@@ -43,10 +43,13 @@ async function updateOverviewMap(routes) {
       const routeAt = point => point && overviewRouteLayers.find(layer => layer.line?.contains(point));
       overviewMap.on('mousemove', event => {
         const layer = routeAt(event.point);
-        container.style.cursor = layer ? 'pointer' : '';
-        container.title = layer?.name || '';
+        const retake = retakeAt(event.point);
+        container.style.cursor = layer || retake ? 'pointer' : '';
+        container.title = retake?.reason || layer?.name || '';
       });
       overviewMap.on('click', event => {
+        const retake = retakeAt(event.point);
+        if (retake) { selectRetakeItem(retake.id); return; }
         const layer = routeAt(event.point);
         if (layer) openOverviewRoute(layer.id);
       });
@@ -63,7 +66,7 @@ async function updateOverviewMap(routes) {
   if (container.offsetWidth === 0) return;
   const paths = routes.map(route => (route.points || []).filter(isValidPoint));
   const signature = JSON.stringify(routes.map((route,i) => [route.id,route.name,paths[i]]));
-  if (overviewGeometry === signature) return;
+  if (overviewGeometry === signature) { updateRetakeOverlays(); return; }
   for (const layer of overviewRouteLayers) {
     layer.line?.destroy();
     layer.marker.destroy();
@@ -89,6 +92,8 @@ async function updateOverviewMap(routes) {
     overviewRouteLayers.push({id:route.id,name:route.name,marker,line});
   });
   overviewGeometry = signature;
+  retakeOverlaySignature = undefined;
+  updateRetakeOverlays();
   if (fit) fitDgisPoints(overviewMap,paths.flat(),0);
 }
 
@@ -149,13 +154,18 @@ function renderOverview() {
   const root=$('overview-content');
   if (!$('overview-map')) {
     root.innerHTML=`<div class="overview-head"><h1>Обзор обследований</h1><dl class="overview-metrics"></dl></div>
-      <div class="overview-grid"><section class="overview-network"><h2>Карта маршрутов</h2>
+      <div class="overview-grid"><section class="overview-network"><div class="overview-section-head"><h2>Карта маршрутов</h2><button type="button" class="button" id="retake-layer" aria-pressed="false">Где переснять</button></div>
       <div class="overview-plot"><div id="overview-map" aria-label="Карта маршрутов обследования"></div>
       <div id="overview-map-notice" role="status" hidden><span></span> <button class="button" type="button" hidden></button></div></div>
-      <ul class="overview-routes"></ul></section>
+      <div id="retake-task-panel" hidden><small>Пунктир — интервал без кадров от 100 м или весь неснятый маршрут. Знак «!» — точка для пересъёмки.</small>
+      <select id="retake-item-select" aria-label="Место для пересъёмки"></select><span id="retake-item-reason" role="status"></span>
+      <div><button type="button" class="button" id="retake-task-add">В задание бригаде</button>
+      <button type="button" class="button" id="retake-download">Скачать задание</button></div></div><ul class="overview-routes"></ul></section>
       <div class="overview-side"><section><h2>Состояние участков</h2><p class="overview-caption"></p>
       <div class="overview-distribution" aria-hidden="true"></div><dl class="overview-statuses"></dl></section>
-      <section><h2>Следующие точки для проверки</h2><ul class="overview-queue"></ul></section></div></div>`;
+      <section><div class="overview-section-head"><h2>Следующие точки для проверки</h2><button class="button" type="button" id="open-finding-queue">Проверка рамок</button></div><ul class="overview-queue"></ul></section></div></div>`;
+    bindRetakePanel();
+    $('open-finding-queue').onclick = openFindingQueue;
   }
   root.querySelector('.overview-metrics').innerHTML=`<div><dt>Маршруты</dt><dd>${routes.length}</dd></div><div><dt>Объекты</dt><dd>${records.objects.length}</dd></div>
     <div><dt>Кадры</dt><dd>${records.frames.length}</dd></div>`;
@@ -164,6 +174,7 @@ function renderOverview() {
   root.querySelector('.overview-distribution').innerHTML=bar;
   root.querySelector('.overview-statuses').innerHTML=statuses;
   root.querySelector('.overview-queue').innerHTML=queue || '<li class="overview-empty">Очередь пуста.</li>';
+  updateRetakePanel(routes);
   updateOverviewMap(routes);
 }
 

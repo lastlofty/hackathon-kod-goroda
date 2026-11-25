@@ -68,7 +68,7 @@ function sectionPriority(record) {
 }
 
 // Split at chainage boundaries, keeping the original road vertices between them.
-function routeSections(route) {
+function splitRouteAt(route, ends) {
   const points = route?.points || [];
   if (points.length < 2 || !(route.distance > 0)) return [];
   const offsets = [0];
@@ -83,8 +83,9 @@ function routeSections(route) {
   const parts = [];
   let previousEnd = points[0];
   let next = 1;
-  for (let start = 0; start < route.distance; start += 100) {
-    const end = Math.min(start+100,route.distance);
+  for (const end of ends) {
+    const start = parts.at(-1)?.end || 0;
+    if (end <= start) continue;
     const path = [previousEnd];
     while (next < points.length-1 && chainage[next] <= end) {
       if (chainage[next] > start) path.push(points[next]);
@@ -96,10 +97,18 @@ function routeSections(route) {
     if (path.at(-1)[0] !== previousEnd[0] || path.at(-1)[1] !== previousEnd[1]) path.push(previousEnd);
     parts.push({index:parts.length, start, end, path, members:[], priority:'empty'});
   }
+  return parts;
+}
+
+function routeSections(route) {
+  if (!(route?.distance > 0)) return [];
+  const ends = Array.from({length:Math.ceil(route.distance/100)}, (_,i) => Math.min((i+1)*100,route.distance));
+  const parts = splitRouteAt(route, ends);
+  if (!parts.length) return parts;
   const levels = Object.keys(sectionColors);
   for (const record of routeRecords(route)) {
     if (!isValidPoint(record.point)) continue;
-    const metre = fractionAlongRoute(record.point, points)*route.distance;
+    const metre = fractionAlongRoute(record.point, route.points)*route.distance;
     const part = parts[Math.min(parts.length-1,Math.floor(metre/100))];
     const priority = sectionPriority(record);
     if (priority === 'empty') continue;
