@@ -8,14 +8,15 @@
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=f276fc24d451">
+<link rel="stylesheet" href="./styles.css?v=29cf322a43a9">
 <script defer src="./dgis-map.js?v=44d9969c7556"></script>
 <script defer src="./drive.js?v=308d7e01209c"></script>
-<script defer src="./backend-api.js?v=1d390725d8f9"></script>
-<script defer src="./inspection-feed.js?v=c4ad73937c93"></script>
-<script defer src="./survey.js?v=4daf0a7f47f2"></script>
-<script defer src="./fieldwork.js?v=007b645e26bb"></script>
-<script defer src="./app.js?v=ed5ae3ebf213"></script>
+<script defer src="./backend-api.js?v=2a5666c42cfe"></script>
+<script defer src="./inspection-feed.js?v=446664ceadea"></script>
+<script defer src="./survey.js?v=0d7e7783eb91"></script>
+<script defer src="./fieldwork.js?v=36ca6449f2da"></script>
+<script defer src="./live-survey.js?v=77a99e394e63"></script>
+<script defer src="./app.js?v=ab5a6f5f9b5f"></script>
 </head>
 <body>
 <header class="topbar">
@@ -59,13 +60,17 @@
     </div>
       <section class="route-deck" aria-label="Просмотр кадров маршрута">
         <div id="retake-list" hidden></div>
-        <div class="deck-head"><h2>Кадры маршрута</h2><span id="route-count" class="mono" aria-live="polite"></span></div>
-        <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
-          <button id="drive-play" type="button" class="button">Проезд 3D</button>
-          <button id="drive-restart" type="button" class="button icon" aria-label="С начала" title="С начала">↻</button>
-          <div class="seek-track"><input id="drive-progress" type="range" min="0" max="1000" value="0" aria-label="Позиция машины на маршруте"><span class="seek-ticks" id="seek-ticks"></span></div>
-          <span id="drive-detail" class="mono"></span>
+        <div class="deck-head"><h2 id="deck-title">Кадры маршрута</h2><button type="button" class="button" id="live-toggle" aria-pressed="false">Следить за проездом</button><span id="live-status" role="status" hidden></span><button type="button" class="button" id="live-return" hidden>К последнему кадру</button><span id="route-count" class="mono" aria-live="polite"></span></div>
+        <div class="route-time">
+          <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
+            <button id="drive-play" type="button" class="button">Проезд 3D</button>
+            <button id="drive-restart" type="button" class="button icon" aria-label="С начала" title="С начала">↻</button>
+            <div class="seek-track"><input id="drive-progress" type="range" min="0" max="1000" value="0" aria-label="Позиция машины на маршруте"><span class="seek-ticks" id="seek-ticks"></span></div>
+            <span id="drive-detail" class="mono"></span>
+          </div>
+          <div id="coverage" hidden><div class="coverage-caption"><span>Места съёмки</span><span id="coverage-detail"></span></div><div id="coverage-track" role="group" aria-label="Расстояния вдоль маршрута"></div></div>
         </div>
+        <div id="class-filters" role="group" aria-label="Классы объектов"></div>
         <div id="route-frames" class="route-frames" aria-label="Кадры маршрута, переключение стрелками влево и вправо"></div>
       </section>
     </div>

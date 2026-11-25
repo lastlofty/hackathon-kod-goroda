@@ -22,7 +22,7 @@ function renderRetakes() {
   $('retake-list').hidden = !active;
   $('retake-list').parentElement.classList.toggle('retakes-active', active);
   if (!active) return;
-  const stops = retakeStops();
+  const stops = retakeStops().filter(matchesClass);
   $('retake-list').innerHTML = '<h2>Что переснять</h2>' + (stops.length ? '<ol>' + stops.map(record =>
     `<li><button data-retake="${escapeHTML(record.id)}" aria-pressed="${record.id === state.selected}"><strong>${escapeHTML(record.place || formatPoint(record.point))}</strong><span>${escapeHTML(displayId(record))} · ${retakeReason(record)}${record.routeId ? '' : ' · вне маршрута'}</span></button></li>`
   ).join('') + '</ol>' : '<p class="subtle">На выбранном маршруте нет точек для пересъёмки.</p>');
@@ -33,6 +33,7 @@ function renderRetakes() {
 }
 
 function changePointFilter(value) {
+  if (value === 'retake' && liveSurvey.active) setLiveMode(false);
   drivePlayer?.pause();
   state.filter = $('priority-filter').value = value;
   renderDeck();

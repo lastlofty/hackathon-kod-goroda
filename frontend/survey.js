@@ -68,6 +68,8 @@ function openRecordLink() {
 }
 
 function openSurveyRecord(record, preferredRoute) {
+  if (liveSurvey.active) setLiveMode(false);
+  if (!matchesClass(record)) selectedClass = '';
   const routeId = record.routeId || preferredRoute;
   const route = drivingRoutes.find(r => r.id === routeId);
   state.filter = $('priority-filter').value = 'all';
@@ -77,6 +79,7 @@ function openSurveyRecord(record, preferredRoute) {
     $('route-select').value = routeId;
     renderDeck();
   }
+  renderDeck();
   showRecord(record.id, true);
 }
 
@@ -135,25 +138,51 @@ function fractionAlongRoute(point, path) {
 }
 
 function renderDeck() {
+  buildClassFilters();
+  syncLiveSelection();
   const route = currentSurveyRoute();
-  const shots = routeRecords(route).filter(record => frameById(record.frame) && isValidPoint(record.point))
-    .map(record => ({record, fraction:fractionAlongRoute(record.point, route.points || [])}))
-    .sort((a, b) => a.fraction - b.fraction);
-  $('seek-ticks').innerHTML = shots.map(({record, fraction}) => {
+  renderLiveStatus();
+  const frames = new Map(records.frames.map(frame => [frame.id, frame]));
+  const positions = new Map();
+  const captures = new Map();
+  for (const record of routeRecords(route)) {
+    const frame = frames.get(record.frame);
+    if (!frame) continue;
+    const point = frame.cameraPoint || record.point;
+    if (!isValidPoint(point)) continue;
+    const fraction = fractionAlongRoute(point, route.points || []);
+    positions.set(record.id, fraction);
+    if ((!liveSurvey.active || isLiveFrame(frame)) && (isValidPoint(frame.cameraPoint) || record.pointKind === 'observation')) {
+      captures.set(frame.id, {fraction});
+    }
+  }
+  routeCoverage(route, [...captures.values()]);
+  const shots = [];
+  const used = new Set();
+  for (const record of visibleObjects()) {
+    const frame = frames.get(record.frame);
+    if (!frame || used.has(frame.id)) continue;
+    if (!liveSurvey.active && !selectedClass && !positions.has(record.id)) continue;
+    used.add(frame.id);
+    shots.push({record, frame, fraction: positions.get(record.id)});
+  }
+  if (liveSurvey.active) shots.sort((a,b) => (b.frame.capturedMs || 0) - (a.frame.capturedMs || 0));
+  else shots.sort((a,b) => (a.fraction ?? Infinity) - (b.fraction ?? Infinity));
+  $('deck-title').textContent = liveSurvey.active ? 'Кадры эфира' : selectedClass ? 'Кадры выбранного класса' : 'Кадры маршрута';
+  $('seek-ticks').innerHTML = shots.filter(shot => shot.fraction !== undefined && !liveSurvey.active).map(({record, fraction}) => {
     const frame = frameById(record.frame);
     const state = reviewState(record);
     const [symbol, label] = reviewMarks[state];
     return `<button type="button" class="seek-mark" data-review="${state}" data-symbol="${symbol}" style="left:${100 * fraction}%" data-shot="${escapeHTML(record.id)}" data-fraction="${fraction}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(record.type)} · ${label}"><span><img src="${escapeHTML(frame.src)}" alt="">${escapeHTML(record.type)} · ${label}</span></button>`;
   }).join('');
   renderRouteSchematic(route);
-  const frames = new Set(shots.map(({record}) => record.frame));
   const pendingFrames = new Set(shots.filter(({record}) => reviewState(record) === 'pending').map(({record}) => record.frame));
-  $('route-count').textContent = route ? `Проверено ${frames.size - pendingFrames.size} из ${frames.size}` : '';
+  $('route-count').textContent = route || liveSurvey.active ? `Проверено ${shots.length - pendingFrames.size} из ${shots.length}` : '';
   $('route-frames').innerHTML = shots.map(({record, fraction}) => {
     const frame = frameById(record.frame);
     const review = reviewState(record);
     const [symbol, label] = reviewMarks[review];
-    return `<button class="film-shot" data-review="${review}" data-symbol="${symbol}" data-shot="${escapeHTML(record.id)}" data-fraction="${fraction}" aria-pressed="${record.id === state.selected}" title="${escapeHTML(record.type)} · ${escapeHTML(displayId(record))} · ${label}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(record.type)} · ${label}"><img src="${escapeHTML(frame.src)}" alt=""><span>${escapeHTML(record.type)}</span></button>`;
+    return `<button class="film-shot" data-review="${review}" data-symbol="${symbol}" data-shot="${escapeHTML(record.id)}" ${fraction === undefined ? '' : `data-fraction="${fraction}"`} aria-pressed="${record.id === state.selected}" title="${escapeHTML(record.type)} · ${escapeHTML(displayId(record))} · ${label}" aria-label="${escapeHTML(displayId(record))} · ${escapeHTML(record.type)} · ${label}"><img src="${escapeHTML(frame.src)}" alt=""><span>${escapeHTML(record.type)}</span></button>`;
   }).join('') || '<p class="subtle">Нет привязанных кадров.</p>';
   $('route-report').hidden = !route || state.view !== 'map';
 }
@@ -181,6 +210,7 @@ function decideRecord(decision) {
 }
 
 function openReviewNote() {
+  holdLive();
   const record = records.objects.find(item => item.id === state.selected);
   if (!record) return;
   drivePlayer?.pause();
@@ -244,7 +274,7 @@ function renderRouteSchematic(selected) {
   const routes = (records.routes || []).filter(r => r.points?.length > 1);
   host.hidden = Boolean(inspectionMap) || !routes.length;
   if (host.hidden) return;
-  const stops = (state.filter === 'retake' ? retakeStops() : visibleObjects().filter(record => record.origin === 'backend'))
+  const stops = (state.filter === 'retake' ? retakeStops().filter(matchesClass) : visibleObjects())
     .filter(record => isValidPoint(record.point));
   const points = routes.flatMap(r => r.points).concat(stops.map(record => record.point));
   const west = Math.min(...points.map(p => p[0])), north = Math.max(...points.map(p => p[1]));

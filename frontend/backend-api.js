@@ -57,6 +57,7 @@ function backendFrame(media) {
   return {
     id: media.id, name: media.original_filename || 'Снимок ' + media.id.slice(0, 8), src: src.href,
     time: Number.isFinite(date.getTime()) ? backendDate.format(date) : '—',
+    capturedMs: date.getTime(), cameraPoint: backendPoint(media), routeId: media.attributes?.route_id,
     capturedOn: media.captured_at?.slice(0,10), backend: true, demo: media.source === 'demo', boxes: []
   };
 }
@@ -169,10 +170,11 @@ async function buildBackendInspection(types, entities, media, findings) {
     const gps = backendPoint(mediaById.get(record.frame));
     return gps && record.point?.[0] === gps[0] && record.point?.[1] === gps[1];
   }).map(record => record.frame));
+  const represented = new Set(objects.map(record => record.frame));
   for (const frame of frames) {
     const media = mediaById.get(frame.id);
     const point = backendPoint(media);
-    if (!point || mappedFrames.has(frame.id)) continue;
+    if (mappedFrames.has(frame.id) || (!point && represented.has(frame.id))) continue;
     objects.push({id: 'media:' + frame.id, displayId: frame.id.slice(0, 8), frame: frame.id, type: 'Кадр проезда',
       priority: 'unverified', origin: 'backend', point, pointKind: 'observation',
       routeId: media.attributes?.route_id, place: media.attributes?.address});

@@ -11,9 +11,11 @@ let records = {schemaVersion: 1, datasetId: null, coordinateOrder: 'longitude,la
 const state = {view: 'map', selected: records.objects[0]?.id, filter: 'all', overlay: true, pin: false, pinFrame: null, pinBox: null};
 const $ = id => document.getElementById(id);
 const frameById = id => records.frames.find(frame => frame.id === id);
-const visibleObjects = () => state.filter === 'retake' ? retakeStops() : records.objects.filter(record =>
+const statusObjects = () => state.filter === 'retake' ? retakeStops() : records.objects.filter(record =>
   state.filter === 'all' || priorityOf(record) === state.filter
 );
+const visibleObjects = () => statusObjects().filter(record => matchesClass(record) &&
+  (!liveSurvey.active || liveFrameIds.has(record.frame)));
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 const number = value => value.toFixed(5);
 const isValidPoint = point => Array.isArray(point) && Number.isFinite(point[0]) &&
@@ -60,6 +62,7 @@ function showRecord(id, move = false) {
     return;
   }
   if (state.pin) resetPin();
+  holdLive(record.frame);
   state.selected = id;
   state.overlay = true;
   renderSelection();
@@ -141,7 +144,7 @@ function renderSelection() {
   $('position').textContent = record ? `${index + 1} / ${visible.length}` : '0 / 0';
   document.querySelectorAll('[data-action="prev"],[data-action="next"]').forEach(button => { button.disabled = visible.length < 2; });
   if (!record) {
-    $('inspector-content').innerHTML = '<p class="empty">Нет объектов по выбранному фильтру.</p>';
+    $('inspector-content').innerHTML = liveSurvey.active ? '<p class="empty">Ожидаем подходящий кадр с бэкенда.</p>' : '<p class="empty">Нет объектов по выбранному фильтру.</p>';
     renderMarkers();
     return;
   }
@@ -189,6 +192,7 @@ function renderList() {
 
 function switchView(view) {
   if (view !== 'map') drivePlayer?.exit();
+  if (view !== 'map' && liveSurvey.active) setLiveMode(false);
   state.view = view;
   $('map-view').hidden = view !== 'map';
   $('list-view').hidden = view === 'map';
@@ -322,6 +326,7 @@ function showNearestDrivePoint([lon, lat]) {
 }
 
 function activateRoute(choice, focus = true) {
+  if (focus && liveSurvey.active) setLiveMode(false);
   drivePlayer?.exit();
   drivingRoute = choice;
   records.route = choice.points;
@@ -329,7 +334,10 @@ function activateRoute(choice, focus = true) {
   inspectionMap.selectRoute(choice);
   $('route-select').value = choice.id;
   renderDeck();
-  drivePlayer = createDrivePlayer(inspectionMap, choice, resetPin, showNearestDrivePoint);
+  drivePlayer = createDrivePlayer(inspectionMap, choice, () => {
+    if (liveSurvey.active) setLiveMode(false);
+    resetPin();
+  }, showNearestDrivePoint);
   if (!focus && state.filter === 'retake') renderSelection();
   if (focus) {
     resetPin();
@@ -341,6 +349,7 @@ function activateRoute(choice, focus = true) {
 }
 
 $('route-select').addEventListener('change', event => {
+  if (liveSurvey.active) setLiveMode(false);
   const choice = drivingRoutes.find(route => route.id === event.target.value);
   if (choice && inspectionMap) activateRoute(choice);
   else {
@@ -417,6 +426,7 @@ function resetPin() {
 }
 
 function startPin(frameId = null, boxId = null, moveId = null) {
+  if (liveSurvey.active) setLiveMode(false);
   if (!inspectionMap) {
     switchView('map');
     openMapSettings();
@@ -495,6 +505,7 @@ function openEditor(id, preferredBox) {
   const frame = frameById(id);
   if (!frame) return;
   drivePlayer?.pause();
+  holdLive(id);
   editor.frame = frame;
   editor.boxes = frame.boxes.map(box => ({...box}));
   selectEditorBox(preferredBox);
@@ -721,6 +732,7 @@ function saveBoxes() {
   for (const record of records.objects) {
     if (record.frame === frame.id && record.box) updateBoxReference(record, frame);
   }
+  renderDeck();
   if (state.view === 'map') renderSelection();
   else renderList();
   persist('Рамки сохранены в этом браузере.');
@@ -802,7 +814,8 @@ function step(direction) {
   const visible = visibleObjects();
   if (!visible.length) return;
   const index = visible.findIndex(record => record.id === state.selected);
-  showRecord(visible[(index + direction + visible.length) % visible.length].id, true);
+  const target = visible[(index + direction + visible.length) % visible.length];
+  showRecord(target.id, true);
 }
 
 $('note-form').addEventListener('submit', event => {
@@ -882,20 +895,21 @@ document.addEventListener('click', event => {
   if (!button) return;
   const data = button.dataset;
   if (data.focusFrame) {
+    holdLive(data.focusFrame);
     drivePlayer?.pause();
     state.focusBox = data.boxId;
     renderSelection();
     document.querySelector('[data-action="full-frame"]')?.focus({preventScroll:true});
   }
   if (data.retake) showRecord(data.retake, true);
-  if (data.decision) decideRecord(data.decision);
+  if (data.decision) { holdLive(); decideRecord(data.decision); }
   if (data.shot) {
     if (!visibleObjects().some(r => r.id === data.shot)) changePointFilter('all');
-    if (drivePlayer) {
+    if (drivePlayer && !liveSurvey.active && data.fraction !== undefined) {
       $('drive-progress').value = Math.round(Number(data.fraction) * 1000);
       $('drive-progress').dispatchEvent(new Event('input'));
     }
-    showRecord(data.shot);
+    showRecord(data.shot, liveSurvey.active || data.fraction === undefined);
   }
   if (data.view) switchView(data.view);
   if (data.action) actions[data.action]?.();
@@ -1056,5 +1070,6 @@ async function loadInspection() {
   });
 }
 
+bindSurveyTools();
 bindFieldwork();
 loadInspection();

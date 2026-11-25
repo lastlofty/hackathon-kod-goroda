@@ -36,6 +36,8 @@ function startInspectionStream(onUpdate) {
   if (!window.EventSource || inspectionStream) return;
   const stream = new EventSource(new URL(inspectionPath('stream'), backendBase));
   inspectionStream = stream;
+  stream.addEventListener('open', renderLiveStatus);
+  stream.addEventListener('error', renderLiveStatus);
   async function receive(event) {
     const revision = ++inspectionRevision;
     try {

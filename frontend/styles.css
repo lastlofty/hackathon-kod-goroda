@@ -257,3 +257,26 @@ survey-crop canvas,survey-crop img { display:block; max-width:100%; height:auto 
 #compare-stage::before { content:'↔'; pointer-events:none; position:absolute; top:50%; left:clamp(13px,var(--split),calc(100% - 13px)); transform:translate(-50%,-50%); z-index:1; padding:2px 5px; border:1px solid white; border-radius:4px; background:#16202a; color:white }
 
 #inference-data { margin: 1rem; max-height: 60vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.deck-head { flex-wrap:wrap; justify-content:flex-start }
+#route-count { margin-left:auto }
+#live-status { color:var(--muted); font-size:11px }
+#live-toggle,#live-return { min-height:26px; padding:3px 8px; font-size:12px }
+#live-toggle[aria-pressed=true],#live-return { border-color:var(--brand); color:var(--brand) }
+#class-filters { display:flex; gap:5px; overflow-x:auto; margin:5px 0 7px; padding:2px }
+#class-filters button { flex:none; color:var(--muted); border:1px solid var(--line); background:transparent; border-radius:4px; padding:3px 7px; font-size:12px; cursor:pointer }
+#class-filters button[aria-pressed=true] { color:var(--brand); background:var(--brand-soft); border-color:var(--brand) }
+#class-filters span { font-variant-numeric:tabular-nums; margin-left:3px }
+#coverage { margin:6px 2px 0 }
+.coverage-caption { display:flex; flex-wrap:wrap; justify-content:space-between; color:var(--muted); font-size:11px }
+#coverage-track { position:relative; height:16px; margin:0 2px }
+.coverage-gap { position:absolute; height:100%; padding:0; background:transparent; border:0; cursor:pointer }
+.coverage-gap::before { content:""; position:absolute; inset:6px 0; background:var(--line) }
+.coverage-gap.long::before { background:repeating-linear-gradient(115deg,#8498a9 0 2px,#344350 2px 5px) }
+.coverage-gap:is(:hover,:focus-visible)::before { background:var(--brand) }
+#coverage-track i { position:absolute; top:3px; bottom:3px; width:2px; background:var(--brand); pointer-events:none }
+.route-time { display:grid; grid-template-columns:auto auto minmax(0,1fr) auto; align-items:center; column-gap:8px }
+.route-time .drive-panel:not([hidden]) { display:contents }
+.route-time #coverage { grid-column:1 / -1 }
+.route-time .drive-panel:not([hidden]) + #coverage { grid-column:3; margin:14px 8px 0 }
+.retakes-active > .route-time { display:none }
