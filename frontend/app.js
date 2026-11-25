@@ -66,6 +66,57 @@ function showRecord(id, move = false) {
   }
 }
 
+const pointAddresses = new Map();
+
+async function lookupPointAddress([lon, lat]) {
+  const query = new URLSearchParams({lat, lon, page_size: 1});
+  let items;
+  try {
+    ({items} = await backendRequest('/api/v1/geocoding/reverse?' + query));
+  } catch (error) {
+    if (error.status === 404) return '';
+    // In a standalone preview the operator may only have configured the browser key.
+    const key = savedMapKey() || document.querySelector('meta[name="mgts-dgis-api-key"]').content;
+    if (!key) throw error;
+    query.set('key', key);
+    query.set('locale', 'ru_RU');
+    const response = await fetch('https://catalog.api.2gis.com/3.0/items/geocode?' + query, {
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await response.json();
+    if (data.meta?.code === 404) return '';
+    if (!response.ok || data.meta?.code !== 200) throw new Error('Geocoder unavailable');
+    items = data.result?.items;
+  }
+  const item = items?.[0];
+  return item?.full_name || item?.address_name || '';
+}
+
+async function showPointAddress(record, field) {
+  if (!isValidPoint(record.point)) {
+    field.textContent = 'Точка не задана';
+    return;
+  }
+  if (record.place && record.pointKind !== 'observation') {
+    field.textContent = record.place;
+    return;
+  }
+  field.textContent = 'Определяем адрес…';
+  const key = record.point.join(',');
+  if (!pointAddresses.has(key)) {
+    pointAddresses.set(key, lookupPointAddress(record.point).catch(error => {
+      pointAddresses.delete(key);
+      throw error;
+    }));
+  }
+  try {
+    const address = await pointAddresses.get(key);
+    field.textContent = address || 'Адрес для этой точки не найден';
+  } catch {
+    field.textContent = 'Адрес недоступен. Проверьте подключение к геокодеру 2ГИС.';
+  }
+}
+
 function renderSelection() {
   const visible = visibleObjects();
   const record = visible.find(item => item.id === state.selected) || visible[0];
@@ -86,9 +137,10 @@ function renderSelection() {
     <figure class="frame"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box) + frame.boxes.filter(item => item.source === 'manual' && item.id !== record.box).map(item => boxHTML(item)).join('') : ''}</figure>
     <div class="frame-tools"><div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div><button class="button" data-frame="${escapeHTML(frame.id)}">Править рамки ↗</button></div>
   </div>` : '<p class="empty">К этому объекту кадр не привязан.</p>';
-  $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span>${status(record)}</div><h2>${escapeHTML(record.type)}</h2>${record.place ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
+  $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span>${status(record)}</div><h2>${escapeHTML(record.type)}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
     ${figure}<div class="record-data"><dl><div><dt>Признак</dt><dd>${escapeHTML(record.issue ?? 'Нет данных о состоянии')}</dd></div>
     <div><dt>Уверенность модели</dt><dd>${!frame?.demo && Number.isFinite(record.confidence) ? record.confidence + '%' : '—'}</dd></div>
+    <div><dt>Адрес точки</dt><dd id="point-address" aria-live="polite"></dd></div>
     <div><dt>${record.pointKind === 'asset' ? 'Координаты объекта' : record.pointKind === 'manual' ? 'Точка оператора' : 'Место наблюдения'}</dt><dd class="mono">${point}</dd></div>
     ${source ? `<div><dt>Источник координат</dt><dd>${source}</dd></div>` : ''}
     ${record.recommendation ? `<div><dt>Рекомендация</dt><dd>${escapeHTML(record.recommendation)}</dd></div>` : ''}
@@ -96,6 +148,7 @@ function renderSelection() {
     <div class="point-tools"><button class="button" data-action="move-point">${isValidPoint(record.point) ? 'Переместить точку' : 'Поставить на карту'}</button>
     ${isValidPoint(record.point) ? '<button class="button" data-action="delete-point">Удалить точку</button>' : ''}</div>
     ${frame ? `<p class="subtle mono">${escapeHTML(frame.name)}</p>` : ''}</div>`;
+  showPointAddress(record, $('point-address'));
   renderMarkers();
 }
 
