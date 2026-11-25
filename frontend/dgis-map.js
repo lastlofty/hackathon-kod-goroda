@@ -123,16 +123,109 @@ function waitForDgisTiles(map) {
   });
 }
 
-async function initDgisMap({container, key, route, points = [], markerButton, onSelect, onPoint}) {
+// Keep the driving line in the same screen plane as the car marker. Insert it
+// between the map canvas and the HTML markers so the car stays on top.
+function drawRouteLine(map, route) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:hidden';
+  svg.setAttribute('aria-hidden', 'true');
+  const lines = ['#ffffff', '#1967a5', 'transparent'].map((color, i) => {
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', [9, 5, 20][i]);
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('stroke-linecap', 'round');
+    svg.append(path);
+    return path;
+  });
+  map.getCanvas().after(svg);
+
+  function draw() {
+    const [width, height] = map.getSize();
+    if (!width || !height) return;
+    // Clip at the near edge before projecting. With a tilted camera, a point
+    // behind the viewer can otherwise project back across the visible street.
+    const left = map.unproject([0, height + 10]);
+    const right = map.unproject([width, height + 10]);
+    const side = ([x, y]) => (right[0] - left[0]) * (y - left[1]) - (right[1] - left[1]) * (x - left[0]);
+    const sign = Math.sign(side(map.getCenter()));
+    const commands = [];
+    const vertex = (command, point) => {
+      const [x, y] = map.project(point);
+      commands.push(command + x.toFixed(2) + ' ' + y.toFixed(2));
+    };
+    let previous = route[0];
+    let from = side(previous) * sign;
+    if (from >= 0) vertex('M', previous);
+    for (let i = 1; i < route.length; i++) {
+      const point = route[i];
+      const to = side(point) * sign;
+      if ((from >= 0) !== (to >= 0)) {
+        const t = from / (from - to);
+        vertex(from < 0 ? 'M' : 'L', previous.map((v, i) => v + t * (point[i] - v)));
+      }
+      if (to >= 0) vertex('L', point);
+      previous = point;
+      from = to;
+    }
+    const d = commands.join(' ');
+    for (const line of lines) line.setAttribute('d', d);
+  }
+
+  map.on('move', draw);
+  map.on('resize', draw);
+  draw();
+  return {
+    contains: point => lines[2].isPointInStroke(new DOMPoint(point[0], point[1])),
+    style(active, hovered, driving) {
+      svg.style.visibility = driving && !active ? 'hidden' : 'visible';
+      lines[1].setAttribute('stroke', hovered ? '#007d81' : active ? '#1967a5' : '#697788');
+      lines[1].setAttribute('stroke-width', hovered ? 7 : active ? 5 : 4);
+    }
+  };
+}
+
+async function initDgisMap({container, key, route, routes = [], points = [], markerButton, onSelect, onPoint, onRouteSelect, onRouteHover, canPickRoute}) {
   const api = await loadDgisSdk();
-  const focus = route.length > 1 ? route : points;
+  const choices = routes.length ? routes : (route.length > 1 ? [{points: route}] : []);
+  const focus = choices.length ? choices.flatMap(choice => choice.points) : points;
   const center = focus[Math.floor(focus.length / 2)] ?? [0, 0];
   let map;
   let vehicle;
   let carIcon;
   let driveGestures;
+  const lines = new Map();
+  const endpoints = [];
+  let selected = choices[0];
+  let hovered;
   let targetZoom;
   let overview;
+
+  function styleRoutes() {
+    for (const [choice, line] of lines) line.style(choice === selected, choice === hovered, Boolean(vehicle));
+  }
+
+  function hover(choice) {
+    if (hovered === choice) return;
+    hovered = choice;
+    container.style.cursor = choice ? 'pointer' : '';
+    onRouteHover?.(choice);
+    styleRoutes();
+  }
+
+  function routeAt(point) {
+    if (!point || vehicle || choices.length < 2 || !canPickRoute()) return;
+    return choices.find(choice => lines.get(choice)?.contains(point));
+  }
+
+  function selectRoute(choice) {
+    selected = choice;
+    hover(undefined);
+    styleRoutes();
+    endpoints.forEach((marker, i) => marker.setCoordinates(i ? choice.points.at(-1) : choice.points[0]));
+  }
 
   function setDriveZoom(value, duration) {
     targetZoom = Math.min(map.getMaxZoom(), Math.max(map.getMinZoom(), value));
@@ -208,18 +301,22 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
     });
     await waitForDgisTiles(map);
     fitPoints(focus, 0);
+    for (const choice of choices) lines.set(choice, drawRouteLine(map, choice.points));
+    styleRoutes();
+    map.on('mousemove', event => hover(routeAt(event.point)));
+    container.addEventListener('pointerleave', () => hover(undefined));
+    map.on('movestart', () => hover(undefined));
     map.on('click', event => {
-      if (event.lngLat) onPoint(event.lngLat);
+      const choice = routeAt(event.point);
+      if (choice) onRouteSelect(choice);
+      else if (event.lngLat) onPoint(event.lngLat);
     });
-    if (route.length > 1) {
-      const line = {coordinates: route, renderingMode: '2d', interactive: false};
-      new api.Polyline(map, {...line, width: 9, color: '#ffffff', zIndex: 1});
-      new api.Polyline(map, {...line, width: 5, color: '#1967a5', zIndex: 2});
-      for (const [text, coordinates] of [['Старт', route[0]], ['Финиш', route.at(-1)]]) {
+    if (selected) {
+      for (const [text, coordinates] of [['Старт', selected.points[0]], ['Финиш', selected.points.at(-1)]]) {
         const label = document.createElement('span');
         label.className = 'route-endpoint';
         label.textContent = text;
-        new api.HtmlMarker(map, {coordinates, html: label, anchor: [0, 20], interactive: false});
+        endpoints.push(new api.HtmlMarker(map, {coordinates, html: label, anchor: [0, 20], interactive: false}));
       }
     }
   } catch (error) {
@@ -230,6 +327,7 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
   const markers = new Map();
   return {
     fitPoints,
+    selectRoute,
     startDrive(point) {
       overview = {center: map.getCenter().slice(), zoom: map.getZoom(), rotation: map.getRotation(), pitch: map.getPitch()};
       carIcon = document.createElement('div');
@@ -239,6 +337,8 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
       enableDriveGestures();
       setDriveZoom(17.6, 0);
       map.setPitch(52, {duration: 0});
+      hover(undefined);
+      styleRoutes();
     },
     updateDrive(point, heading, deltaMs) {
       vehicle?.setCoordinates(point);
@@ -255,6 +355,7 @@ async function initDgisMap({container, key, route, points = [], markerButton, on
       map.unblockInteraction();
       vehicle?.destroy();
       vehicle = null;
+      styleRoutes();
       carIcon = null;
       map.setPitch(overview.pitch, {duration: 0});
       map.setRotation(overview.rotation, {duration: 0});

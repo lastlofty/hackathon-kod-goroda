@@ -58,6 +58,337 @@
           "source": "demo"
         }
       ]
+    },
+    {
+      "id": "pano-tverskoy-01",
+      "name": "Страстной бульвар · Опора освещения",
+      "src": "./assets/panoramas/tverskoy-01.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6075261, 55.7656894],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6075260818%2C55.765689362499984&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6075260818%2C55.765689362499984&panorama%5Bdirection%5D=261.65%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298079454_673098561_23_1786776556"
+      },
+      "boxes": [
+        {
+          "id": "tverskoy-01-box",
+          "label": "Опора освещения",
+          "x": 0.45312,
+          "y": 0.125,
+          "w": 0.09688,
+          "h": 0.61562,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-tverskoy-02",
+      "name": "Страстной бульвар · Опора освещения",
+      "src": "./assets/panoramas/tverskoy-02.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6065408, 55.7652815],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6065407713%2C55.765281465899996&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6065407713%2C55.765281465899996&panorama%5Bdirection%5D=24.17%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298073577_673102876_23_1786776564"
+      },
+      "boxes": [
+        {
+          "id": "tverskoy-02-box",
+          "label": "Опора освещения",
+          "x": 0.55312,
+          "y": 0.19844,
+          "w": 0.07812,
+          "h": 0.47344,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-tverskoy-03",
+      "name": "Страстной бульвар · Опора освещения",
+      "src": "./assets/panoramas/tverskoy-03.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6067291, 55.7653629],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6067291162%2C55.76536293199999&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6067291162%2C55.76536293199999&panorama%5Bdirection%5D=254.90%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298074700_673102015_23_1786776564"
+      },
+      "boxes": [
+        {
+          "id": "tverskoy-03-box",
+          "label": "Опора освещения",
+          "x": 0.42708,
+          "y": 0.27813,
+          "w": 0.075,
+          "h": 0.43281,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-tverskoy-04",
+      "name": "Страстной бульвар · Опора освещения",
+      "src": "./assets/panoramas/tverskoy-04.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6052272, 55.7647774],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6052271509%2C55.7647774079&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6052271509%2C55.7647774079&panorama%5Bdirection%5D=28.30%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298065741_673108210_23_1786776661"
+      },
+      "boxes": [
+        {
+          "id": "tverskoy-04-box",
+          "label": "Опора освещения",
+          "x": 0.49688,
+          "y": 0.16875,
+          "w": 0.07917,
+          "h": 0.51562,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-tverskoy-05",
+      "name": "Тверской бульвар · Опора освещения",
+      "src": "./assets/panoramas/tverskoy-05.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6050047, 55.7647025],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6050046682%2C55.76470248029999&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6050046682%2C55.76470248029999&panorama%5Bdirection%5D=241.67%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298064413_673109003_23_1786776661"
+      },
+      "boxes": [
+        {
+          "id": "tverskoy-05-box",
+          "label": "Опора освещения",
+          "x": 0.42917,
+          "y": 0.23125,
+          "w": 0.07083,
+          "h": 0.45312,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-tverskoy-06",
+      "name": "Тверской бульвар · Опора освещения",
+      "src": "./assets/panoramas/tverskoy-06.webp",
+      "time": "15.12.2025",
+      "cameraPoint": [37.6048292, 55.7642303],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6048292483%2C55.76423027969999&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6048292483%2C55.76423027969999&panorama%5Bdirection%5D=327.91%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298063367_673113999_23_1765719467"
+      },
+      "boxes": [
+        {
+          "id": "tverskoy-06-box",
+          "label": "Опора освещения",
+          "x": 0.23542,
+          "y": 0.23438,
+          "w": 0.08646,
+          "h": 0.54688,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-nikitsky-07",
+      "name": "Никитский бульвар · Опора освещения",
+      "src": "./assets/panoramas/nikitsky-07.webp",
+      "time": "15.10.2026",
+      "cameraPoint": [37.5985006, 55.7575097],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.5985005894%2C55.7575096766&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.5985005894%2C55.7575096766&panorama%5Bdirection%5D=14.06%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298025615_673185099_23_1790837034"
+      },
+      "boxes": [
+        {
+          "id": "nikitsky-07-box",
+          "label": "Опора освещения",
+          "x": 0.47292,
+          "y": 0.40937,
+          "w": 0.03021,
+          "h": 0.26562,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-nikitsky-08",
+      "name": "Никитский бульвар · Светофор",
+      "src": "./assets/panoramas/nikitsky-08.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.5979572, 55.7576048],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.5979571661%2C55.757604798&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.5979571661%2C55.757604798&panorama%5Bdirection%5D=113.42%2C0&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298022373_673184093_23_1786776792"
+      },
+      "boxes": [
+        {
+          "id": "nikitsky-08-box",
+          "label": "Светофор",
+          "x": 0.38438,
+          "y": 0.21094,
+          "w": 0.05937,
+          "h": 0.18438,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-nikitsky-09",
+      "name": "Никитский бульвар · Остановка «Никитский бульвар»",
+      "src": "./assets/panoramas/nikitsky-09.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.5992174, 55.7559132],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.5992174447%2C55.75591323909999&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.5992174447%2C55.75591323909999&panorama%5Bdirection%5D=311.49%2C0&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298029891_673201987_23_1786776824"
+      },
+      "boxes": [
+        {
+          "id": "nikitsky-09-box",
+          "label": "Остановка «Никитский бульвар»",
+          "x": 0.51771,
+          "y": 0.44375,
+          "w": 0.11875,
+          "h": 0.12187,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-nikitsky-10",
+      "name": "Никитский бульвар · Остановка «Никитские Ворота»",
+      "src": "./assets/panoramas/nikitsky-10.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.5998205, 55.7560772],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.59982046199999%2C55.756077158&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.59982046199999%2C55.756077158&panorama%5Bdirection%5D=121.69%2C0&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298033488_673200253_23_1786777903"
+      },
+      "boxes": [
+        {
+          "id": "nikitsky-10-box",
+          "label": "Остановка «Никитские Ворота»",
+          "x": 0.55833,
+          "y": 0.44531,
+          "w": 0.12396,
+          "h": 0.13125,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-petrovsky-11",
+      "name": "Петровский бульвар · Опора освещения",
+      "src": "./assets/panoramas/petrovsky-11.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6136821, 55.7680162],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.613682127699995%2C55.768016167100015&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.613682127699995%2C55.768016167100015&panorama%5Bdirection%5D=294.16%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298116177_673073940_23_1786778275"
+      },
+      "boxes": [
+        {
+          "id": "petrovsky-11-box",
+          "label": "Опора освещения",
+          "x": 0.44062,
+          "y": 0.08125,
+          "w": 0.13437,
+          "h": 0.57969,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-petrovsky-12",
+      "name": "Петровский бульвар · Светофор",
+      "src": "./assets/panoramas/petrovsky-12.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6139782, 55.7680198],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6139782406%2C55.76801983949999&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6139782406%2C55.76801983949999&panorama%5Bdirection%5D=265.78%2C0&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298117943_673073902_23_1786789079"
+      },
+      "boxes": [
+        {
+          "id": "petrovsky-12-box",
+          "label": "Светофор",
+          "x": 0.17083,
+          "y": 0.425,
+          "w": 0.02292,
+          "h": 0.075,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-petrovsky-13",
+      "name": "Петровский бульвар · Светофор",
+      "src": "./assets/panoramas/petrovsky-13.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6205331, 55.7671696],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6205331087%2C55.7671696067&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6205331087%2C55.7671696067&panorama%5Bdirection%5D=113.10%2C0&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298157044_673082898_23_1786778332"
+      },
+      "boxes": [
+        {
+          "id": "petrovsky-13-box",
+          "label": "Светофор",
+          "x": 0.45625,
+          "y": 0.2875,
+          "w": 0.01458,
+          "h": 0.04531,
+          "source": "manual"
+        }
+      ]
+    },
+    {
+      "id": "pano-petrovsky-14",
+      "name": "Петровский бульвар · Опора освещения",
+      "src": "./assets/panoramas/petrovsky-14.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.6207352, 55.7671322],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6207352139%2C55.76713220349999&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6207352139%2C55.76713220349999&panorama%5Bdirection%5D=136.93%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298158250_673083294_23_1786778340"
+      },
+      "boxes": [
+        {
+          "id": "petrovsky-14-box",
+          "label": "Светофор",
+          "x": 0.56146,
+          "y": 0.50469,
+          "w": 0.02083,
+          "h": 0.07187,
+          "source": "manual"
+        }
+      ],
+      "note": "На этой панораме виден светофор. Светильник на опоре по снимку подтвердить не удалось."
+    },
+    {
+      "id": "pano-petrovsky-15",
+      "name": "Петровский бульвар · Опора освещения",
+      "src": "./assets/panoramas/petrovsky-15.webp",
+      "time": "15.08.2026",
+      "cameraPoint": [37.620932, 55.7670933],
+      "source": {
+        "label": "Панорама на Яндекс Картах",
+        "url": "https://yandex.ru/maps/213/moscow/?ll=37.6209319547%2C55.7670932914&l=stv%2Csta&z=18&panorama%5Bpoint%5D=37.6209319547%2C55.7670932914&panorama%5Bdirection%5D=128.86%2C6&panorama%5Bspan%5D=70%2C50&panorama%5Bid%5D=1298159423_673083706_23_1786789185"
+      },
+      "boxes": [
+        {
+          "id": "petrovsky-15-box",
+          "label": "Опора освещения",
+          "x": 0.42917,
+          "y": 0.28125,
+          "w": 0.08333,
+          "h": 0.41563,
+          "source": "manual"
+        }
+      ]
     }
   ],
   "objects": [
@@ -67,16 +398,16 @@
       "issue": null,
       "priority": "unverified",
       "place": "Москва, Страстной бульвар",
-      "point": [
-        37.6071196,
-        55.7656558
-      ],
+      "point": [37.6071196, 55.7656558],
       "pointKind": "asset",
       "origin": "reference",
       "source": {
         "label": "© OpenStreetMap",
         "url": "https://www.openstreetmap.org/node/6767113307"
-      }
+      },
+      "routeId": "tverskoy",
+      "box": "tverskoy-01-box",
+      "frame": "pano-tverskoy-01"
     },
     {
       "id": "ОО-002",
@@ -84,16 +415,16 @@
       "issue": null,
       "priority": "unverified",
       "place": "Москва, Страстной бульвар",
-      "point": [
-        37.6066921,
-        55.7654712
-      ],
+      "point": [37.6066921, 55.7654712],
       "pointKind": "asset",
       "origin": "reference",
       "source": {
         "label": "© OpenStreetMap",
         "url": "https://www.openstreetmap.org/node/6767113300"
-      }
+      },
+      "routeId": "tverskoy",
+      "box": "tverskoy-02-box",
+      "frame": "pano-tverskoy-02"
     },
     {
       "id": "ОО-003",
@@ -101,16 +432,16 @@
       "issue": null,
       "priority": "unverified",
       "place": "Москва, Страстной бульвар",
-      "point": [
-        37.6062949,
-        55.765297
-      ],
+      "point": [37.6062949, 55.765297],
       "pointKind": "asset",
       "origin": "reference",
       "source": {
         "label": "© OpenStreetMap",
         "url": "https://www.openstreetmap.org/node/6767113315"
-      }
+      },
+      "routeId": "tverskoy",
+      "box": "tverskoy-03-box",
+      "frame": "pano-tverskoy-03"
     },
     {
       "id": "ОО-004",
@@ -118,16 +449,16 @@
       "issue": null,
       "priority": "unverified",
       "place": "Москва, Страстной бульвар",
-      "point": [
-        37.605416,
-        55.7649747
-      ],
+      "point": [37.605416, 55.7649747],
       "pointKind": "asset",
       "origin": "reference",
       "source": {
         "label": "© OpenStreetMap",
         "url": "https://www.openstreetmap.org/node/6767113303"
-      }
+      },
+      "routeId": "tverskoy",
+      "box": "tverskoy-04-box",
+      "frame": "pano-tverskoy-04"
     },
     {
       "id": "ОО-005",
@@ -135,16 +466,16 @@
       "issue": null,
       "priority": "unverified",
       "place": "Москва, Тверской бульвар",
-      "point": [
-        37.6046648,
-        55.7645994
-      ],
+      "point": [37.6046648, 55.7645994],
       "pointKind": "asset",
       "origin": "reference",
       "source": {
         "label": "© OpenStreetMap",
         "url": "https://www.openstreetmap.org/node/6767113306"
-      }
+      },
+      "routeId": "tverskoy",
+      "box": "tverskoy-05-box",
+      "frame": "pano-tverskoy-05"
     },
     {
       "id": "ОО-006",
@@ -152,34 +483,335 @@
       "issue": null,
       "priority": "unverified",
       "place": "Москва, Тверской бульвар",
-      "point": [
-        37.6046956,
-        55.7643502
-      ],
+      "point": [37.6046956, 55.7643502],
       "pointKind": "asset",
       "origin": "reference",
       "source": {
         "label": "© OpenStreetMap",
         "url": "https://www.openstreetmap.org/node/6767113301"
-      }
+      },
+      "routeId": "tverskoy",
+      "box": "tverskoy-06-box",
+      "frame": "pano-tverskoy-06"
+    },
+    {
+      "id": "OSM-4262313477",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Никитский бульвар",
+      "point": [37.5985835, 55.757696],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "nikitsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/4262313477"
+      },
+      "box": "nikitsky-07-box",
+      "frame": "pano-nikitsky-07"
+    },
+    {
+      "id": "OSM-1402324126",
+      "type": "Светофор",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Никитский бульвар",
+      "point": [37.5982965, 55.7575221],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "nikitsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/1402324126"
+      },
+      "box": "nikitsky-08-box",
+      "frame": "pano-nikitsky-08"
+    },
+    {
+      "id": "OSM-2062605580",
+      "type": "Остановка «Никитский бульвар»",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Никитский бульвар",
+      "point": [37.5989678, 55.7560375],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "nikitsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/2062605580"
+      },
+      "box": "nikitsky-09-box",
+      "frame": "pano-nikitsky-09"
+    },
+    {
+      "id": "OSM-2062605573",
+      "type": "Остановка «Никитские Ворота»",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Никитский бульвар",
+      "point": [37.6000492, 55.7559977],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "nikitsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/2062605573"
+      },
+      "box": "nikitsky-10-box",
+      "frame": "pano-nikitsky-10"
+    },
+    {
+      "id": "OSM-6767086338",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Петровский бульвар",
+      "point": [37.6133911, 55.7680896],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "petrovsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/6767086338"
+      },
+      "box": "petrovsky-11-box",
+      "frame": "pano-petrovsky-11"
+    },
+    {
+      "id": "OSM-96485170",
+      "type": "Светофор",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Петровский бульвар",
+      "point": [37.6136062, 55.7680044],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "petrovsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/96485170"
+      },
+      "box": "petrovsky-12-box",
+      "frame": "pano-petrovsky-12"
+    },
+    {
+      "id": "OSM-13673887943",
+      "type": "Светофор",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Петровский бульвар",
+      "point": [37.620859, 55.7670914],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "petrovsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/13673887943"
+      },
+      "box": "petrovsky-13-box",
+      "frame": "pano-petrovsky-13"
+    },
+    {
+      "id": "OSM-5943221095",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Петровский бульвар",
+      "point": [37.6209433, 55.767007],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "petrovsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/5943221095"
+      },
+      "frame": "pano-petrovsky-14"
+    },
+    {
+      "id": "OSM-5943221096",
+      "type": "Опора освещения",
+      "issue": null,
+      "priority": "unverified",
+      "place": "Москва, Петровский бульвар",
+      "point": [37.6212289, 55.7669587],
+      "pointKind": "asset",
+      "origin": "reference",
+      "routeId": "petrovsky",
+      "source": {
+        "label": "© OpenStreetMap",
+        "url": "https://www.openstreetmap.org/node/5943221096"
+      },
+      "box": "petrovsky-15-box",
+      "frame": "pano-petrovsky-15"
     }
   ],
   "drivingStops": [
-    [
-      37.609508,
-      55.766393
-    ],
-    [
-      37.6075389,
-      55.7656736
-    ],
-    [
-      37.6034922,
-      55.7634957
-    ],
-    [
-      37.59975,
-      55.7604
-    ]
+    [37.609508, 55.766393],
+    [37.6075389, 55.7656736],
+    [37.6034922, 55.7634957],
+    [37.59975, 55.7604]
+  ],
+  "routes": [
+    {
+      "id": "tverskoy",
+      "name": "Страстной — Тверской бульвар",
+      "stops": [
+        [37.609508, 55.766393],
+        [37.6075389, 55.7656736],
+        [37.6034922, 55.7634957],
+        [37.59975, 55.7604]
+      ],
+      "points": [
+        [37.609508, 55.766393],
+        [37.609412, 55.766395],
+        [37.609321, 55.766389],
+        [37.609268, 55.766378],
+        [37.609174, 55.766347],
+        [37.608752, 55.766151],
+        [37.608434, 55.766016],
+        [37.607887, 55.765779],
+        [37.60775, 55.765735],
+        [37.607571, 55.765711],
+        [37.607518, 55.765688],
+        [37.607448, 55.765658],
+        [37.606272, 55.765155],
+        [37.605799, 55.764953],
+        [37.605689, 55.764919],
+        [37.605415, 55.764833],
+        [37.605221, 55.764772],
+        [37.605017, 55.764704],
+        [37.604922, 55.764665],
+        [37.604899, 55.764656],
+        [37.604801, 55.764603],
+        [37.604453, 55.764309],
+        [37.604008, 55.763935],
+        [37.603589, 55.763581],
+        [37.603497, 55.763504],
+        [37.603489, 55.763496],
+        [37.603447, 55.763457],
+        [37.603432, 55.763445],
+        [37.602832, 55.762894],
+        [37.602635, 55.762713],
+        [37.602542, 55.762617],
+        [37.601773, 55.761812],
+        [37.60175, 55.761786],
+        [37.601553, 55.761581],
+        [37.601318, 55.761335],
+        [37.600746, 55.760737],
+        [37.600259, 55.760226],
+        [37.600155, 55.760264],
+        [37.600127, 55.760275],
+        [37.600004, 55.76032],
+        [37.599761, 55.760409]
+      ],
+      "distance": 950,
+      "duration": 207
+    },
+    {
+      "id": "nikitsky",
+      "name": "Никитский бульвар — Арбатские Ворота",
+      "stops": [
+        [37.59975, 55.7604],
+        [37.600645, 55.753239]
+      ],
+      "points": [
+        [37.599761, 55.760409],
+        [37.600004, 55.76032],
+        [37.600127, 55.760275],
+        [37.600155, 55.760264],
+        [37.600259, 55.760226],
+        [37.600125, 55.760086],
+        [37.599812, 55.759759],
+        [37.599517, 55.759449],
+        [37.599405, 55.759333],
+        [37.598689, 55.758583],
+        [37.598346, 55.758223],
+        [37.598259, 55.758132],
+        [37.598042, 55.757841],
+        [37.598023, 55.757803],
+        [37.598015, 55.757787],
+        [37.597993, 55.757739],
+        [37.597974, 55.757655],
+        [37.597974, 55.757577],
+        [37.597978, 55.757548],
+        [37.597989, 55.75748],
+        [37.597993, 55.757463],
+        [37.598016, 55.757407],
+        [37.598035, 55.757356],
+        [37.598104, 55.757244],
+        [37.598109, 55.757237],
+        [37.598454, 55.756816],
+        [37.59853, 55.756723],
+        [37.599154, 55.755963],
+        [37.599662, 55.755344],
+        [37.599782, 55.755257],
+        [37.600086, 55.755036],
+        [37.600248, 55.754903],
+        [37.600365, 55.754784],
+        [37.600457, 55.75467],
+        [37.600539, 55.754521],
+        [37.600569, 55.754382],
+        [37.600586, 55.754242],
+        [37.600602, 55.754077],
+        [37.600645, 55.753239]
+      ],
+      "distance": 876,
+      "duration": 164
+    },
+    {
+      "id": "petrovsky",
+      "name": "Петровский бульвар — Трубная площадь",
+      "stops": [
+        [37.60969, 55.76636],
+        [37.616594, 55.7677457],
+        [37.620859, 55.7670914]
+      ],
+      "points": [
+        [37.609686, 55.766358],
+        [37.609661, 55.766383],
+        [37.609814, 55.766425],
+        [37.609852, 55.766436],
+        [37.609937, 55.76646],
+        [37.610017, 55.766493],
+        [37.610551, 55.766719],
+        [37.61112, 55.766959],
+        [37.61133, 55.767047],
+        [37.61206, 55.767355],
+        [37.612409, 55.767502],
+        [37.613154, 55.767816],
+        [37.613469, 55.76795],
+        [37.613562, 55.767976],
+        [37.61364, 55.767992],
+        [37.613696, 55.767999],
+        [37.613763, 55.768002],
+        [37.613804, 55.768001],
+        [37.614706, 55.767948],
+        [37.614881, 55.767938],
+        [37.615199, 55.767919],
+        [37.615444, 55.767898],
+        [37.615638, 55.767875],
+        [37.615703, 55.767867],
+        [37.615953, 55.767828],
+        [37.616208, 55.767789],
+        [37.616587, 55.767732],
+        [37.616612, 55.767729],
+        [37.616787, 55.767702],
+        [37.618158, 55.767495],
+        [37.618195, 55.76749],
+        [37.618466, 55.767449],
+        [37.61883, 55.767394],
+        [37.619466, 55.767298],
+        [37.619907, 55.767231],
+        [37.62009, 55.767203],
+        [37.620139, 55.767196],
+        [37.620745, 55.767104],
+        [37.620823, 55.767092],
+        [37.620856, 55.767086]
+      ],
+      "distance": 765,
+      "duration": 146
+    }
   ]
 }

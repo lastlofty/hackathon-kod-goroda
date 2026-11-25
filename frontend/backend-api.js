@@ -124,7 +124,14 @@ async function loadBackendInspection() {
     if (frame) return backendBox(finding, frame, label(entityById.get(finding.entity_id), finding), sizes);
   }));
   boxes.forEach((box, index) => {
-    if (box) frameById.get(findings[index].media_id).boxes.push(box);
+    if (!box) return;
+    const finding = findings[index];
+    const frame = frameById.get(finding.media_id);
+    frame.boxes.push(box);
+    (frame.findingsByBox ??= {})[box.id] = {
+      recordId: finding.entity_id || finding.id,
+      confidence: Number.isFinite(finding.score) ? Math.round(finding.score * 100) : null
+    };
   });
 
   function objectRecord(entity, finding) {

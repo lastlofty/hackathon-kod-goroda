@@ -54,5 +54,25 @@ dialog{width:min(1000px,calc(100% - 24px));max-height:calc(100% - 24px);color:va
 .json-editor{display:grid;gap:8px;padding:12px}
 .json-editor textarea{width:100%;resize:vertical;font:12px/1.45 ui-monospace,monospace}
 .json-editor input{max-width:100%}
+#annotator .dialog-head > div{flex:1;min-width:0;overflow-wrap:anywhere}
+#next-frame{flex-shrink:0}
+.box-entry + .box-entry{margin-top:6px}
+.box-entry .table-link{margin:0 0 4px 6px}
+.route-picker,.route-hover{background:#fff;border:1px solid #bdc6cf;width:fit-content;max-width:100%;margin-top:5px;padding:4px 7px;font-size:12px}
+.route-picker{display:flex;align-items:center;gap:6px;pointer-events:auto}
+.route-picker select{min-width:0;max-width:100%}
+.route-hover{position:absolute;top:100%;color:#075d60;pointer-events:none}
 #box-json-error{color:var(--urgent)}
 #box-json-error:empty{display:none}
+
+.frame button.box{pointer-events:auto;cursor:pointer;padding:0;background:transparent;min-height:0}
+.editor-image[data-mode="edit"]{cursor:default}
+.editor-image[data-mode="edit"] .box{pointer-events:auto;cursor:move}
+.editor-image .box.selected{z-index:1}
+.box-handle{position:absolute;display:block;width:11px;height:11px;border:1px solid #174764;background:#fff;border-radius:2px}
+.box-handle[data-corner$="w"]{left:-6px}
+.box-handle[data-corner$="e"]{right:-6px}
+.box-handle[data-corner^="n"]{top:-6px}
+.box-handle[data-corner^="s"]{bottom:-6px}
+.box-handle[data-corner="nw"],.box-handle[data-corner="se"]{cursor:nwse-resize}
+.box-handle[data-corner="ne"],.box-handle[data-corner="sw"]{cursor:nesw-resize}

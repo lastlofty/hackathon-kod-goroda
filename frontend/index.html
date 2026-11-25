@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="mgts-dgis-api-key" content="">
-<meta name="mgts-inspection-data" content="./data/inspection.json">
+<meta name="mgts-inspection-data" content="./data/inspection.json?v=aef94e305699">
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=f3a3f570e64d">
-<script defer src="./dgis-map.js?v=4e425fbb260e"></script>
-<script defer src="./drive.js?v=e128c96b7b2e"></script>
-<script defer src="./backend-api.js"></script>
-<script defer src="./app.js?v=d145b76c504b"></script>
+<link rel="stylesheet" href="./styles.css?v=84533d6b7e2e">
+<script defer src="./dgis-map.js?v=526e646a83d0"></script>
+<script defer src="./drive.js?v=e0556aca1f15"></script>
+<script defer src="./backend-api.js?v=a5a160199ffa"></script>
+<script defer src="./app.js?v=86c248971f56"></script>
 </head>
 <body>
 <header class="topbar">
@@ -39,6 +39,10 @@
         <button class="button" data-action="pin" id="pin-button" aria-pressed="false" hidden>+ Поставить точку</button>
         <button class="button" type="button" data-action="map-settings" id="map-provider">Подключить 2ГИС</button>
         </div>
+        <label id="route-picker" class="route-picker" hidden>Маршрут
+          <select id="route-select" aria-label="Выбрать маршрут"></select>
+        </label>
+        <div id="route-hover" class="route-hover" hidden></div>
         <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
           <button id="drive-play" type="button" class="button">Проезд 3D</button>
           <button id="drive-restart" type="button" class="button icon" aria-label="С начала" title="С начала">↻</button>
@@ -77,7 +81,11 @@
   <section id="list-view" class="list-view" hidden aria-label="Список записей"></section>
 </main>
 <dialog id="annotator" aria-labelledby="edit-title">
-  <div class="dialog-head"><div><h2 id="edit-title">Разметка кадра</h2><p id="editor-filename" class="subtle mono"></p></div><button class="button icon" data-action="close-editor" aria-label="Закрыть разметку">×</button></div>
+  <div class="dialog-head">
+    <div><h2 id="edit-title">Разметка кадра</h2><p id="editor-filename" class="subtle mono"></p></div>
+    <button class="button" id="next-frame" data-action="next-frame">Следующий кадр →</button>
+    <button class="button icon" data-action="close-editor" aria-label="Закрыть разметку">×</button>
+  </div>
   <div class="editor-tools">
     <label>Класс <select id="box-type"><option>Кабельный колодец</option><option>Опора связи</option><option>Шкаф связи</option><option>Другое</option></select></label>
     <button class="button" data-action="draw" aria-pressed="true">Новая рамка</button>

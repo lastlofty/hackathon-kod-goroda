@@ -44,10 +44,13 @@ function persist(message) {
   }
 }
 
-function boxHTML(box, selected = false, caption = true) {
+function boxHTML(box, selected = false, editable = false, frameId) {
   if (!box) return '';
   const classes = ['box', box.source === 'manual' ? 'manual' : '', selected ? 'selected' : '', box.y < .08 ? 'top' : '', box.x > .67 ? 'right' : ''].join(' ');
-  return `<div class="${classes}" style="--x:${box.x};--y:${box.y};--w:${box.w};--h:${box.h}">${caption ? `<span class="tag">${escapeHTML(box.label)}</span>` : ''}</div>`;
+  const handles = editable && selected ? ['nw','ne','sw','se'].map(corner => `<i class="box-handle" data-corner="${corner}"></i>`).join('') : '';
+  const tag = frameId ? 'button' : 'div';
+  const action = frameId ? `type="button" data-frame="${escapeHTML(frameId)}" aria-label="Править рамку: ${escapeHTML(box.label)}"` : '';
+  return `<${tag} ${action} class="${classes}" data-box-id="${escapeHTML(box.id)}" style="--x:${box.x};--y:${box.y};--w:${box.w};--h:${box.h}"><span class="tag">${escapeHTML(box.label)}</span>${handles}</${tag}>`;
 }
 
 function showRecord(id, move = false) {
@@ -134,7 +137,7 @@ function renderSelection() {
   const point = formatPoint(record.point);
   const source = sourceLink(record.source);
   const figure = frame ? `<div class="frame-panel">
-    <figure class="frame"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box) + frame.boxes.filter(item => item.source === 'manual' && item.id !== record.box).map(item => boxHTML(item)).join('') : ''}</figure>
+    <figure class="frame"><img src="${escapeHTML(frame.src)}" alt="Кадр объекта ${escapeHTML(record.id)}">${state.overlay ? boxHTML(box, false, false, frame.id) + frame.boxes.filter(item => item.source === 'manual' && item.id !== record.box).map(item => boxHTML(item, false, false, frame.id)).join('') : ''}</figure>
     <div class="frame-tools"><div class="frame-toggle"><button data-action="original" aria-pressed="${!state.overlay}">Исходник</button><button data-action="overlay" aria-pressed="${state.overlay}">Разметка</button></div><button class="button" data-frame="${escapeHTML(frame.id)}">Править рамки ↗</button></div>
   </div>` : '<p class="empty">К этому объекту кадр не привязан.</p>';
   $('inspector-content').innerHTML = `<div class="record-head"><div class="record-id"><span class="mono">${escapeHTML(displayId(record))}</span>${status(record)}</div><h2>${escapeHTML(record.type)}</h2>${record.place && (record.pointKind === 'observation' || !isValidPoint(record.point)) ? `<p class="subtle">${escapeHTML(record.place)}</p>` : ''}</div>
@@ -145,6 +148,8 @@ function renderSelection() {
     ${source ? `<div><dt>Источник координат</dt><dd>${source}</dd></div>` : ''}
     ${record.recommendation ? `<div><dt>Рекомендация</dt><dd>${escapeHTML(record.recommendation)}</dd></div>` : ''}
     <div><dt>Съёмка</dt><dd>${escapeHTML(frame?.time || '—')}</dd></div></dl>
+    ${frame?.note ? `<p class="subtle">${escapeHTML(frame.note)}</p>` : ''}
+    ${frame?.source ? `<p class="subtle">${sourceLink(frame.source)}</p>` : ''}
     <div class="point-tools"><button class="button" data-action="move-point">${isValidPoint(record.point) ? 'Переместить точку' : 'Поставить на карту'}</button>
     ${isValidPoint(record.point) ? '<button class="button" data-action="delete-point">Удалить точку</button>' : ''}</div>
     ${frame ? `<p class="subtle mono">${escapeHTML(frame.name)}</p>` : ''}</div>`;
@@ -189,6 +194,7 @@ function switchView(view) {
 let inspectionMap;
 let drivePlayer;
 let drivingRoute;
+let drivingRoutes = [];
 let routeUnavailable = false;
 let backendConnected = false;
 let mapError;
@@ -265,7 +271,7 @@ function setMapStatus() {
   $('pin-button').hidden = !connected;
   const hasRoute = displayedRoute().length > 1;
   $('fit-button').hidden = !connected || !hasRoute && !records.objects.some(record => isValidPoint(record.point));
-  $('fit-button').textContent = hasRoute ? 'Весь маршрут' : 'Все точки';
+  $('fit-button').textContent = drivingRoutes.length > 1 ? 'Все маршруты' : hasRoute ? 'Весь маршрут' : 'Все точки';
   $('provider-zoom').hidden = !connected;
   $('map').classList.toggle('map-active', connected);
   $('map').classList.toggle('placing-point', state.pin);
@@ -286,6 +292,43 @@ function renderMarkers() {
   inspectionMap?.setMarkers(visibleObjects().filter(record => isValidPoint(record.point)), state.selected);
 }
 
+function showNearestDrivePoint([lon, lat]) {
+  const longitudeScale = Math.cos(lat * Math.PI / 180);
+  let nearest;
+  let bestDistance = Infinity;
+  for (const record of visibleObjects()) {
+    if (!isValidPoint(record.point) || (record.routeId && record.routeId !== drivingRoute.id)) continue;
+    const distance = Math.hypot((record.point[0] - lon) * longitudeScale, record.point[1] - lat);
+    if (distance < bestDistance) {
+      nearest = record;
+      bestDistance = distance;
+    }
+  }
+  if (nearest && nearest.id !== state.selected) showRecord(nearest.id);
+}
+
+function activateRoute(choice, focus = true) {
+  drivePlayer?.exit();
+  drivingRoute = choice;
+  records.route = choice.points;
+  records.routeSource = {kind:'driving', label:'Маршрут 2ГИС', distance:choice.distance, duration:choice.duration};
+  inspectionMap.selectRoute(choice);
+  $('route-select').value = choice.id;
+  $('route-credit').textContent = records.routeSource.label;
+  drivePlayer = createDrivePlayer(inspectionMap, choice, resetPin, showNearestDrivePoint);
+  if (focus) {
+    resetPin();
+    const first = visibleObjects().find(record => record.routeId === choice.id && isValidPoint(record.point));
+    if (first) showRecord(first.id);
+    inspectionMap.fitPoints(choice.points);
+  }
+}
+
+$('route-select').addEventListener('change', event => {
+  const choice = drivingRoutes.find(route => route.id === event.target.value);
+  if (choice) activateRoute(choice);
+});
+
 async function startMap() {
   const key = savedMapKey() || document.querySelector('meta[name="mgts-dgis-api-key"]').content.trim();
   if (!key) {
@@ -295,19 +338,28 @@ async function startMap() {
   mapLoading = true;
   setMapStatus();
   try {
-    if (Array.isArray(records.drivingStops) && records.drivingStops.length > 1) {
-      try {
-        drivingRoute = await loadDgisDrivingRoute(key, records.drivingStops);
-        records.route = drivingRoute.points;
-        records.routeSource = {kind: 'driving', label: 'Маршрут 2ГИС', distance: drivingRoute.distance, duration: drivingRoute.duration};
-      } catch {
-        records.route = [];
-        delete records.routeSource;
-        routeUnavailable = true;
-      }
+    const catalog = records.routes ?? (records.drivingStops?.length > 1
+      ? [{id:'default', name:'Маршрут обследования', stops:records.drivingStops}] : []);
+    if (catalog.length) {
+      drivingRoutes = (await Promise.all(catalog.map(async choice => {
+        try {
+          return {...choice, ...await loadDgisDrivingRoute(key, choice.stops)};
+        } catch {
+          // The demo includes verified road geometry for keys without routing access.
+          return choice.points?.length > 1 && choice.points.every(isValidPoint) ? choice : null;
+        }
+      }))).filter(Boolean);
+      drivingRoute = drivingRoutes[0];
+      routeUnavailable = !drivingRoute;
     }
     inspectionMap = await initDgisMap({
-      container: $('map'), key, route: displayedRoute(),
+      container: $('map'), key, route: displayedRoute(), routes: drivingRoutes,
+      canPickRoute: () => !state.pin,
+      onRouteSelect: activateRoute,
+      onRouteHover: choice => {
+        $('route-hover').hidden = !choice;
+        $('route-hover').textContent = choice ? choice.name + ' · ' + (choice.distance / 1000).toLocaleString('ru-RU', {maximumFractionDigits:1}) + ' км' : '';
+      },
       points: records.objects.map(record => record.point).filter(isValidPoint),
       markerButton: createMarkerButton,
       onSelect: id => {
@@ -318,8 +370,9 @@ async function startMap() {
       onPoint: point => { if (state.pin) addPoint(point); }
     });
     if (drivingRoute) {
-      drivePlayer = createDrivePlayer(inspectionMap, drivingRoute, resetPin);
-      $('route-credit').textContent = 'Маршрут 2ГИС';
+      $('route-select').replaceChildren(...drivingRoutes.map(choice => new Option(choice.name, choice.id)));
+      $('route-picker').hidden = drivingRoutes.length < 2;
+      activateRoute(drivingRoute, false);
     } else if (displayedRoute().length > 1 && records.routeSource) {
       $('route-credit').innerHTML = sourceLink(records.routeSource);
     }
@@ -408,25 +461,59 @@ function deletePoint() {
 
 const editor = {frame: null, boxes: [], selected: null, mode: 'draw', drag: null};
 
-function openEditor(id) {
+function openEditor(id, preferredBox) {
   const frame = frameById(id);
   if (!frame) return;
+  drivePlayer?.pause();
   editor.frame = frame;
   editor.boxes = frame.boxes.map(box => ({...box}));
-  editor.selected = null;
-  editor.mode = 'draw';
+  selectEditorBox(preferredBox);
   editor.drag = null;
-  $('editor-filename').textContent = frame.name;
+  const index = records.frames.indexOf(frame);
+  $('editor-filename').textContent = `Кадр ${index + 1} из ${records.frames.length} · ${frame.name}`;
+  $('next-frame').disabled = index === records.frames.length - 1;
   $('edit-photo').src = frame.src;
-  $('editor-hint').textContent = 'Протяните от одного угла рамки до противоположного.';
   renderEditor();
-  $('annotator').showModal();
+  if (!$('annotator').open) $('annotator').showModal();
+}
+
+function editorBoxRow(box) {
+  const frame = editor.frame;
+  const finding = frame.findingsByBox?.[box.id];
+  const linked = records.objects.filter(record => record.frame === frame.id && record.box === box.id);
+  const mapped = linked.find(record => isValidPoint(record.point)) ||
+    (finding && records.objects.find(record => record.id === finding.recordId && isValidPoint(record.point)));
+  const confidence = finding ? finding.confidence : linked.find(record => Number.isFinite(record.confidence))?.confidence;
+  let source = box.source === 'manual' ? 'Вручную' : frame.demo || box.source === 'demo' ? 'Демо' : 'Модель';
+  if (source === 'Модель' && Number.isFinite(confidence)) source += ` · ${confidence}%`;
+  return `<div class="box-entry"><button class="box-row" data-box="${escapeHTML(box.id)}" aria-pressed="${box.id === editor.selected}"><span>${escapeHTML(box.label)}</span><span class="subtle">${source}</span></button>
+    ${mapped ? `<button class="table-link" data-editor-record="${escapeHTML(mapped.id)}" aria-label="Показать на карте: ${escapeHTML(box.label)}">Показать на карте ↗</button>` : ''}</div>`;
+}
+
+function selectEditorBox(id) {
+  const box = editor.boxes.find(item => item.id === id) || editor.boxes[0];
+  editor.selected = box?.id ?? null;
+  editor.mode = box ? 'edit' : 'draw';
+  if (!box) return;
+  const type = $('box-type');
+  if (![...type.options].some(option => option.value === box.label)) type.add(new Option(box.label));
+  type.value = box.label;
+}
+
+function paintEditorBoxes(boxes) {
+  $('edit-boxes').innerHTML = boxes.map(box => boxHTML(box, box.id === editor.selected, editor.mode === 'edit')).join('');
 }
 
 function renderEditor() {
   const selected = editor.boxes.find(box => box.id === editor.selected);
-  $('edit-boxes').innerHTML = editor.boxes.map(box => boxHTML(box, box.id === editor.selected)).join('');
-  $('boxes-list').innerHTML = editor.boxes.length ? editor.boxes.map(box => `<button class="box-row" data-box="${escapeHTML(box.id)}" aria-pressed="${box.id === editor.selected}"><span>${escapeHTML(box.label)}</span><span class="subtle">${box.source === 'manual' ? 'Вручную' : box.source === 'demo' ? 'Демо' : 'Модель'}</span></button>`).join('') : '<p class="subtle">Пока нет рамок.</p>';
+  $('editor-image').dataset.mode = editor.mode;
+  $('editor-hint').textContent = {
+    edit: 'Потяните рамку, чтобы переместить её, или угол, чтобы изменить размер.',
+    draw: 'Протяните от одного угла новой рамки до противоположного.',
+    redraw: 'Протяните новую границу для выбранной рамки.'
+  }[editor.mode];
+  paintEditorBoxes(editor.boxes);
+  $('boxes-list').innerHTML = editor.boxes.length ? editor.boxes.map(editorBoxRow).join('') : '<p class="subtle">Пока нет рамок.</p>';
   document.querySelector('[data-action="delete-box"]').disabled = !selected;
   document.querySelector('[data-action="redraw"]').disabled = !selected;
   document.querySelector('[data-action="redraw"]').setAttribute('aria-pressed', editor.mode === 'redraw');
@@ -445,28 +532,70 @@ function rectangle(start,end) {
 
 const canvas = $('editor-image');
 canvas.addEventListener('pointerdown', event => {
-  if (event.button !== 0 || editor.drag || !$('edit-photo').naturalWidth) return;
-  editor.drag = {id:event.pointerId, start:photoPoint(event)};
+  if (event.button !== 0 || !event.isPrimary || editor.drag || !$('edit-photo').naturalWidth) return;
+  const element = event.target.closest('[data-box-id]');
+  const targetId = editor.mode === 'edit' ? element?.dataset.boxId : editor.selected;
+  const original = editor.boxes.find(box => box.id === targetId);
+  const corner = event.target.dataset.corner;
+  if (editor.mode === 'edit') {
+    if (!original) return;
+    selectEditorBox(original.id);
+    renderEditor();
+  }
   canvas.setPointerCapture(event.pointerId);
+  editor.drag = {id:event.pointerId, start:photoPoint(event), original, corner, mode:editor.mode, newId:original?.id ?? newId()};
 });
+
+function dragBounds(drag, [x, y]) {
+  if (drag.mode !== 'edit') return rectangle(drag.start, [x, y]);
+  const box = drag.original;
+  const dx = x - drag.start[0], dy = y - drag.start[1];
+  const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+  if (!drag.corner) return {
+    x:clamp(box.x + dx, 0, 1 - box.w), y:clamp(box.y + dy, 0, 1 - box.h), w:box.w, h:box.h
+  };
+  const left = drag.corner.endsWith('w'), top = drag.corner.startsWith('n');
+  const right = box.x + box.w, bottom = box.y + box.h;
+  const minW = Math.min(.008, box.w), minH = Math.min(.008, box.h);
+  return rectangle([left ? right : box.x, top ? bottom : box.y], [
+    left ? clamp(box.x + dx, 0, right - minW) : clamp(right + dx, box.x + minW, 1),
+    top ? clamp(box.y + dy, 0, bottom - minH) : clamp(bottom + dy, box.y + minH, 1)
+  ]);
+}
+
+function draggedBoxes(drag, point) {
+  const bounds = dragBounds(drag, point);
+  const box = {...drag.original, id:drag.newId, label:$('box-type').value, ...bounds, source:'manual'};
+  return drag.original ? editor.boxes.map(item => item.id === box.id ? box : item) : [...editor.boxes, box];
+}
+
 canvas.addEventListener('pointermove', event => {
-  if (editor.drag?.id !== event.pointerId) return;
-  const box = {...rectangle(editor.drag.start,photoPoint(event)), source:'manual', label:$('box-type').value};
-  $('edit-boxes').innerHTML = editor.boxes.filter(item => editor.mode !== 'redraw' || item.id !== editor.selected).map(item => boxHTML(item,item.id === editor.selected)).join('') + boxHTML(box,false,false);
+  if (editor.drag?.id === event.pointerId) paintEditorBoxes(draggedBoxes(editor.drag, photoPoint(event)));
 });
 canvas.addEventListener('pointerup', event => {
-  if (editor.drag?.id !== event.pointerId) return;
-  const bounds = rectangle(editor.drag.start,photoPoint(event));
+  const drag = editor.drag;
+  if (drag?.id !== event.pointerId) return;
   editor.drag = null;
-  if (bounds.w < .008 || bounds.h < .008) { renderEditor(); return; }
-  const box = {id: editor.mode === 'redraw' ? editor.selected : newId(), label:$('box-type').value, source:'manual', ...bounds};
-  if (editor.mode === 'redraw') editor.boxes = editor.boxes.map(item => item.id === box.id ? box : item);
-  else editor.boxes.push(box);
-  editor.selected = box.id;
-  editor.mode = 'draw';
+  const point = photoPoint(event);
+  const bounds = rectangle(drag.start, point);
+  const changed = drag.mode === 'edit' ? bounds.w + bounds.h > .00001 : bounds.w >= .008 && bounds.h >= .008;
+  if (changed) {
+    editor.boxes = draggedBoxes(drag, point);
+    selectEditorBox(drag.newId);
+  }
   renderEditor();
 });
-canvas.addEventListener('pointercancel', () => { editor.drag = null; renderEditor(); });
+canvas.addEventListener('pointercancel', event => {
+  if (editor.drag?.id !== event.pointerId) return;
+  editor.drag = null;
+  renderEditor();
+});
+
+$('box-type').addEventListener('change', () => {
+  if (editor.mode !== 'edit') return;
+  editor.boxes = editor.boxes.map(box => box.id === editor.selected ? {...box, label:$('box-type').value, source:'manual'} : box);
+  renderEditor();
+});
 
 function openBoxJSON() {
   $('box-json-text').value = JSON.stringify(editor.boxes, null, 2);
@@ -499,15 +628,14 @@ function validatedBoxes(text) {
     const label = box.label.trim();
     const old = previous.get(id);
     const unchanged = old && old.label === label && old.x === x && old.y === y && old.w === w && old.h === h;
-    return {id, label, x, y, w, h, source: unchanged ? old.source : 'manual'};
+    return unchanged ? old : {id, label, x, y, w, h, source: 'manual'};
   });
 }
 
 function applyBoxJSON() {
   try {
     editor.boxes = validatedBoxes($('box-json-text').value);
-    editor.selected = null;
-    editor.mode = 'draw';
+    selectEditorBox(editor.selected);
     renderEditor();
     $('box-json-dialog').close();
     $('editor-hint').textContent = 'Проверьте рамки на снимке и нажмите «Сохранить».';
@@ -546,10 +674,16 @@ function saveBoxes() {
   for (const record of records.objects) {
     if (record.frame === frame.id && record.box) updateBoxReference(record, frame);
   }
-  $('annotator').close();
   if (state.view === 'map') renderSelection();
   else renderList();
   persist('Рамки сохранены в этом браузере.');
+}
+
+function saveBeforeNavigation() {
+  if (JSON.stringify(editor.boxes) === JSON.stringify(editor.frame.boxes)) return true;
+  if (!window.confirm('Сохранить изменения рамок и перейти дальше? При отмене вы останетесь в редакторе.')) return false;
+  saveBoxes();
+  return true;
 }
 
 async function imagePreview(file) {
@@ -627,7 +761,7 @@ function step(direction) {
 const actions = {
   fit: () => {
     drivePlayer?.exit();
-    const route = displayedRoute();
+    const route = drivingRoutes.length > 1 ? drivingRoutes.flatMap(choice => choice.points) : displayedRoute();
     inspectionMap?.fitPoints(route.length > 1 ? route : records.objects.map(record => record.point).filter(isValidPoint));
   },
   pin: () => state.pin ? resetPin() : startPin(), prev: () => step(-1), next: () => step(1),
@@ -639,10 +773,14 @@ const actions = {
   original: () => { state.overlay = false; renderSelection(); document.querySelector('[data-action="original"]')?.focus({preventScroll:true}); },
   overlay: () => { state.overlay = true; renderSelection(); document.querySelector('[data-action="overlay"]')?.focus({preventScroll:true}); },
   'close-editor': () => $('annotator').close(),
-  draw: () => { editor.mode = 'draw'; renderEditor(); },
-  redraw: () => { editor.mode = 'redraw'; renderEditor(); $('editor-hint').textContent = 'Протяните новую рамку для выбранного объекта.'; },
-  'delete-box': () => { editor.boxes = editor.boxes.filter(box => box.id !== editor.selected); editor.selected = null; editor.mode = 'draw'; renderEditor(); },
-  'save-boxes': saveBoxes,
+  draw: () => { editor.selected = null; editor.mode = 'draw'; renderEditor(); },
+  redraw: () => { editor.mode = 'redraw'; renderEditor(); },
+  'delete-box': () => { editor.boxes = editor.boxes.filter(box => box.id !== editor.selected); selectEditorBox(); renderEditor(); },
+  'save-boxes': () => { saveBoxes(); $('annotator').close(); },
+  'next-frame': () => {
+    const next = records.frames[records.frames.indexOf(editor.frame) + 1];
+    if (next && saveBeforeNavigation()) openEditor(next.id);
+  },
   'move-point': () => startPin(null, null, state.selected),
   'delete-point': deletePoint,
   'box-json': openBoxJSON,
@@ -668,6 +806,13 @@ document.addEventListener('click', event => {
   const data = button.dataset;
   if (data.view) switchView(data.view);
   if (data.action) actions[data.action]?.();
+  if (data.editorRecord) {
+    if (!saveBeforeNavigation()) return;
+    $('annotator').close();
+    state.filter = $('priority-filter').value = 'all';
+    switchView('map');
+    showRecord(data.editorRecord, true);
+  }
   if (data.record) {
     if (state.view !== 'map') {
       state.filter = $('priority-filter').value = 'all';
@@ -675,13 +820,10 @@ document.addEventListener('click', event => {
     }
     showRecord(data.record, true);
   }
-  if (data.frame) openEditor(data.frame);
+  if (data.frame) openEditor(data.frame, data.boxId ?? records.objects.find(item => item.id === state.selected && item.frame === data.frame)?.box);
   if (data.place) startPin(data.place);
   if (data.box) {
-    editor.selected = data.box;
-    const label = editor.boxes.find(box => box.id === data.box)?.label;
-    const type = $('box-type');
-    type.value = [...type.options].some(option => option.value === label) ? label : 'Другое';
+    selectEditorBox(data.box);
     renderEditor();
     [...$('boxes-list').querySelectorAll('button')].find(item => item.dataset.box === data.box)?.focus({preventScroll:true});
   }
@@ -706,7 +848,23 @@ function savedInspection() {
 function mergeInspection(dataset, saved) {
   if (!saved) return dataset;
   if (saved.datasetId && saved.datasetId !== dataset.datasetId) return dataset;
-  if (saved.datasetId) return {...dataset, frames: saved.frames, objects: saved.objects};
+  if (saved.datasetId) {
+    const existingFrames = new Set(saved.frames.map(frame => frame.id));
+    const frames = saved.frames.concat(dataset.frames.filter(frame => !existingFrames.has(frame.id)));
+    const missing = new Map(dataset.objects.map(record => [record.id, record]));
+    const objects = saved.objects.map(record => {
+      const seed = missing.get(record.id);
+      missing.delete(record.id);
+      if (!seed?.routeId) return record;
+      const merged = {...record, routeId:seed.routeId};
+      if (seed.frame && !record.frame) {
+        merged.frame = seed.frame;
+        merged.box = seed.box;
+      }
+      return merged;
+    });
+    return {...dataset, frames, objects:objects.concat([...missing.values()])};
+  }
 
   const demoFrames = new Map(dataset.frames.filter(frame => frame.demo).map(frame => [frame.id, frame]));
   const existing = new Set(saved.frames.map(frame => frame.id));
@@ -722,7 +880,7 @@ function mergeInspection(dataset, saved) {
 async function loadInspection() {
   try {
     const url = document.querySelector('meta[name="mgts-inspection-data"]').content;
-    const response = await fetch(url);
+    const response = await fetch(url, {cache: 'no-cache'});
     if (!response.ok) throw new Error('Inspection data unavailable');
     const data = await response.json();
     if (data.schemaVersion !== 1 || typeof data.datasetId !== 'string' ||

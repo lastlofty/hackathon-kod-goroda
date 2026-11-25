@@ -1,6 +1,6 @@
 'use strict';
 
-function createDrivePlayer(map, route, onEnter) {
+function createDrivePlayer(map, route, onEnter, onPosition) {
   const points = route.points;
   const distances = [0];
   const degrees = Math.PI / 180;
@@ -40,6 +40,7 @@ function createDrivePlayer(map, route, onEnter) {
     const distance = length * elapsed / playTime;
     const {point, heading} = poseAt(distance);
     map.updateDrive(point, heading, deltaMs);
+    onPosition?.(point);
     progress.value = Math.round(elapsed / playTime * 1000);
   }
 
@@ -110,6 +111,7 @@ function createDrivePlayer(map, route, onEnter) {
   };
 
   return {
+    pause,
     exit() {
       pause();
       elapsed = 0;
