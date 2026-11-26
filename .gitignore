@@ -28,3 +28,9 @@ triton/model_repository/**
 !triton/model_repository/**/
 !triton/model_repository/**/.gitkeep
 !triton/model_repository/**/config.pbtxt
+
+# CV (ml/cv): dataset photos, run outputs and trained heads are not committed
+ml/cv/data/images/
+ml/cv/data/reference/
+ml/cv/runs/
+ml/cv/models/
