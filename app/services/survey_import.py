@@ -158,8 +158,11 @@ def bind_frames(result, inputs, db, workspace_id):
     remaining = {i["id"]: i["name"] for i in by_id.values()}
     payload = result.model_dump(mode="json", by_alias=True)
     for obj in payload["objects"]:
-        if obj["verdict"] is None:
-            del obj["verdict"]
+        for field in ("verdict", "priority_level", "severity", "recommendation"):
+            if obj[field] is None:
+                del obj[field]
+        if not obj["defects"]:
+            del obj["defects"]
     for frame in payload["frames"]:
         for detection in frame["detections"]:
             if detection["inference"] is None:

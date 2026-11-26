@@ -12,6 +12,8 @@ const captureSurvey = (() => {
     mock_detection: "Демонстрационное обнаружение",
     pole: "Опора",
     cable: "Кабель",
+    TKSH: "ТКШ (телекоммуникационный шкаф)",
+    RSH: "РЩ (распределительный щит)",
     open: "Открытый люк",
     urgent: "Срочно",
     review: "На проверку",
@@ -70,6 +72,9 @@ const captureSurvey = (() => {
   let saving = false;
   const demoReviewsKey = "mgts-demo-defect-reviews-v1";
   const priorityRank = { urgent: 0, review: 1, unverified: 2, normal: 3 };
+  const levelNames = { 1: "Критический", 2: "Высокий", 3: "Средний", 4: "Нет" };
+  const levelLabel = (level) =>
+    Object.hasOwn(levelNames, level) ? "P" + level + " · " + levelNames[level] : "—";
   const activeId = () => job?.id || "new";
   const pointOf = (value) =>
     hasPoint(value) ? [value.lon, value.lat] : undefined;
@@ -161,6 +166,10 @@ const captureSurvey = (() => {
         issue: o.defect ? label(o.defect) : undefined,
         defect: o.defect,
         verdict: verdict(o),
+        priorityLevel: o.priority_level,
+        priorityLabel: o.priority_level ? levelLabel(o.priority_level) : undefined,
+        defects: o.defects || [],
+        recommendation: o.recommendation,
         confidence: Number.isFinite(o.defect_score)
           ? Math.round(o.defect_score * 100)
           : null,
@@ -171,6 +180,7 @@ const captureSurvey = (() => {
     objects.sort(
       (a, b) =>
         priorityRank[a.priority] - priorityRank[b.priority] ||
+        (a.priorityLevel ?? 5) - (b.priorityLevel ?? 5) ||
         (b.confidence ?? -1) - (a.confidence ?? -1) ||
         a.id.localeCompare(b.id),
     );
@@ -469,7 +479,10 @@ const captureSurvey = (() => {
       '<div class="record-data"><dl>' +
       (obj
         ? field("Вердикт модели", obj.verdict) +
+          (obj.priorityLevel ? field("Приоритет ремонта", obj.priorityLabel) : "") +
           field("Тип дефекта модели", obj.issue) +
+          (obj.defects.length > 1 ? field("Все дефекты", obj.defects.join(", ")) : "") +
+          (obj.recommendation ? field("Рекомендация", obj.recommendation) : "") +
           field(
             "Уверенность в дефекте",
             obj.confidence == null ? "—" : obj.confidence + "%",
@@ -608,11 +621,13 @@ const captureSurvey = (() => {
             escapeHTML(o.type + " · " + displayId(o)) +
             "</strong><p>" +
             escapeHTML(
-              [o.verdict, o.issue, reviewLabel(o), o.inspectionReview?.defect]
+              [o.priorityLabel, o.verdict, o.issue, reviewLabel(o), o.inspectionReview?.defect]
                 .filter(Boolean)
                 .join(" · "),
             ) +
-            "</p><p>" +
+            "</p>" +
+            (o.recommendation ? "<p>" + escapeHTML(o.recommendation) + "</p>" : "") +
+            "<p>" +
             escapeHTML(o.place || formatPoint(o.assetPoint || o.point)) +
             "</p></div></article>"
           );

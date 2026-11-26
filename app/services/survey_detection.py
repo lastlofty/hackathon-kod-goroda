@@ -77,6 +77,10 @@ def survey_result(db, survey, jobs):
                     "verdict": attributes.get("verdict"),
                     "defect": defect,
                     "defect_score": defect_score,
+                    "priority_level": attributes.get("priority_level"),
+                    "defects": attributes.get("defects") or [],
+                    "severity": attributes.get("severity"),
+                    "recommendation": finding.recommendation,
                 }
             )
     result = SurveyResult.model_validate(

@@ -51,6 +51,9 @@ class Frame(Located):
     detections: list[Detection]
 
 
+PRIORITY_LEVELS = {1: "Критический", 2: "Высокий", 3: "Средний", 4: "Нет"}
+
+
 class SurveyObject(Located):
     verdict: Literal["ok", "defect", "unknown"] | None = None
     object_id: Identifier
@@ -58,6 +61,14 @@ class SurveyObject(Located):
     defect: str | None = None
     defect_score: Score | None = None
     status: Identifier
+    # Приоритет ремонта: 1 — критический (крепление), 2 — высокий (МП),
+    # 3 — средний (коррозия), 4 — дефекта нет. Порядок внутри статуса.
+    priority_level: int | None = Field(default=None, ge=1, le=4)
+    defects: list[Annotated[str, Field(min_length=1, max_length=256)]] = Field(
+        default_factory=list, max_length=16
+    )
+    severity: Score | None = None
+    recommendation: str | None = Field(default=None, max_length=1024)
     observations: list[Identifier] = Field(min_length=1)
     best_det_id: Identifier
 
