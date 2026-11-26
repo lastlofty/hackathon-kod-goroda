@@ -1,6 +1,15 @@
 services:
   backend:
     build: .
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       DATABASE_URL: postgresql+psycopg://app:app@postgres:5432/app
       TRITON_URL: ${TRITON_URL:-http://triton:8000}
