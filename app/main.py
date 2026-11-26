@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
+from app.core.access import protect_access
 from app.core.config import get_settings
 from app.services.survey_detection import run_queue
 
@@ -39,6 +40,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["Content-Type"],
 )
+app.middleware("http")(protect_access)
 app.include_router(api_router)
 app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
