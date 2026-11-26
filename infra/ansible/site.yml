@@ -1,0 +1,90 @@
+---
+- name: Validate MGTS deployment host
+  hosts: all
+  gather_facts: true
+  become: false
+  vars:
+    mgts_repo_dir: '{{ playbook_dir }}/../..'
+    mgts_mode: mock
+    mgts_min_free_gib: 40
+    mgts_gpu_probe_image: ubuntu:24.04
+  tasks:
+    - name: Require supported mode and Ubuntu
+      ansible.builtin.assert:
+        that:
+          - mgts_mode in ['mock', 'gpu']
+          - ansible_facts['distribution'] == 'Ubuntu'
+          - mgts_mode != 'gpu' or ansible_facts['architecture'] == 'x86_64'
+        fail_msg: 'Run on the Ubuntu deployment host, using mock or gpu mode (GPU requires x86_64 here).'
+
+    - name: Show host information
+      ansible.builtin.debug:
+        msg:
+          - "OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          - "RAM: {{ ansible_facts['memtotal_mb'] }} MiB"
+          - 'Mode: {{ mgts_mode }}'
+
+    - name: Check prerequisites under deployment user
+      ansible.builtin.command:
+        argv: '{{ item }}'
+      loop:
+        - [git, --version]
+        - [gh, --version]
+        - [docker, --version]
+        - [docker, compose, version]
+        - [docker, info, --format, '{% raw %}{{.DockerRootDir}}{% endraw %}']
+        - [flock, --version]
+      changed_when: false
+
+    - name: Check checkout disk space
+      ansible.builtin.command:
+        argv: [df, -Pk, '{{ mgts_repo_dir }}']
+      register: repo_df
+      changed_when: false
+
+    - name: Require free disk space for data and images
+      ansible.builtin.assert:
+        that:
+          - (repo_df.stdout_lines[-1].split()[3] | int) >= (mgts_min_free_gib | int) * 1024 * 1024
+        fail_msg: 'Insufficient free space on checkout filesystem. Check Docker storage separately if on another mount.'
+
+    - name: Check Compose configuration without printing secrets
+      ansible.builtin.command:
+        argv: "{{ ['docker', 'compose', '-f', 'docker-compose.yml'] + (['-f', 'docker-compose.gpu.yml'] if mgts_mode == 'gpu' else []) + ['config', '--quiet'] }}"
+        chdir: '{{ mgts_repo_dir }}'
+      changed_when: false
+      no_log: true
+
+    - name: Check Compose wait support
+      ansible.builtin.command:
+        argv: [docker, compose, up, --help]
+      register: compose_help
+      changed_when: false
+
+    - name: Require Compose wait flags
+      ansible.builtin.assert:
+        that:
+          - "'--wait' in compose_help.stdout"
+          - "'--wait-timeout' in compose_help.stdout"
+
+    - name: Check GPU driver and container access
+      when: mgts_mode == 'gpu'
+      block:
+        - name: Check NVIDIA host driver
+          ansible.builtin.command:
+            argv: [nvidia-smi, '--query-gpu=name,driver_version,memory.total', '--format=csv']
+          register: gpu_info
+          changed_when: false
+
+        - name: Show GPU details
+          ansible.builtin.debug:
+            var: gpu_info.stdout_lines
+
+        - name: Check GPU from an isolated temporary container
+          ansible.builtin.command:
+            argv: [docker, run, --rm, --network, none, --gpus, all, '{{ mgts_gpu_probe_image }}', nvidia-smi]
+          changed_when: true
+
+    - name: Report preflight outcome
+      ansible.builtin.debug:
+        msg: 'Preflight passed. No drivers, service settings, or application containers were changed. Model readiness and real inference are separate tests.'
