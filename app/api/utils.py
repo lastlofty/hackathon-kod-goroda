@@ -17,6 +17,15 @@ def get_or_404(db: Session, model: type[ModelT], entity_id: Any) -> ModelT:
     return entity
 
 
+def reject_null_fields(changes: dict[str, Any], *fields: str) -> None:
+    for field in fields:
+        if field in changes and changes[field] is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"{field} cannot be null",
+            )
+
+
 def apply_patch(entity: Any, payload: BaseModel) -> Any:
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(entity, field, value)

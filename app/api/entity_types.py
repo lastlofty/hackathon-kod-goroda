@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
 from app.api.deps import DbSession
-from app.api.utils import apply_patch, commit, get_or_404
+from app.api.utils import apply_patch, commit, get_or_404, reject_null_fields
 from app.models.entity_type import EntityType
 from app.schemas.entity_type import EntityTypeCreate, EntityTypeRead, EntityTypeUpdate
 from app.services.attribute_validation import validate_schema
@@ -52,6 +52,8 @@ def update_entity_type(
     entity_type_id: UUID, payload: EntityTypeUpdate, db: DbSession
 ) -> EntityType:
     entity_type = get_or_404(db, EntityType, entity_type_id)
+    changes = payload.model_dump(exclude_unset=True)
+    reject_null_fields(changes, "code", "name", "attribute_schema", "active")
     if payload.attribute_schema is not None:
         validate_schema(payload.attribute_schema)
     return commit(db, apply_patch(entity_type, payload))
