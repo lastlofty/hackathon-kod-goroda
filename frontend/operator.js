@@ -169,7 +169,10 @@ const captureSurvey = (() => {
         priorityLevel: o.priority_level,
         priorityLabel: o.priority_level ? levelLabel(o.priority_level) : undefined,
         defects: o.defects || [],
-        recommendation: o.recommendation,
+        hasDefect: o.verdict === "defect" ||
+          (o.verdict == null && Boolean(o.defect) &&
+            !["none", "normal", "ok"].includes(o.defect)),
+        recommendation: o.recommendation || best?.box.inference?.recommendation,
         confidence: Number.isFinite(o.defect_score)
           ? Math.round(o.defect_score * 100)
           : null,
@@ -588,7 +591,7 @@ const captureSurvey = (() => {
       ? records.objects.filter(
           (o) =>
             reviewed(o) !== "rejected" &&
-            (o.priority === "urgent" ||
+            (o.hasDefect || o.priority === "urgent" ||
               o.priority === "review" ||
               reviewed(o) === "confirmed"),
         )
@@ -626,10 +629,11 @@ const captureSurvey = (() => {
                 .join(" · "),
             ) +
             "</p>" +
-            (o.recommendation ? "<p>" + escapeHTML(o.recommendation) + "</p>" : "") +
             "<p>" +
             escapeHTML(o.place || formatPoint(o.assetPoint || o.point)) +
-            "</p></div></article>"
+            "</p>" +
+            (o.recommendation ? "<p>Рекомендация: " + escapeHTML(o.recommendation) + "</p>" : "") +
+            "</div></article>"
           );
         })
         .join("");
