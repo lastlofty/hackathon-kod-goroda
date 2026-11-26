@@ -181,9 +181,10 @@ def bind_frames(result, inputs, db, workspace_id):
         else:
             raise ValueError(f"Загрузите изображение {name} или укажите его media_id")
         source = by_id.get(frame["media_id"], {})
-        for field in ("lat", "lon", "captured_at"):
-            if frame.get(field) is None and field in source:
-                frame[field] = source[field]
+        if source.get("lat") is not None and source.get("lon") is not None:
+            frame["lat"], frame["lon"] = source["lat"], source["lon"]
+        if frame.get("captured_at") is None and "captured_at" in source:
+            frame["captured_at"] = source["captured_at"]
         remaining.pop(frame["media_id"], None)
     if remaining:
         raise ValueError(

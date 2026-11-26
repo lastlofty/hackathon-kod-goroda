@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
 from app.api.deps import DbSession
-from app.api.utils import apply_patch, commit, get_or_404
+from app.api.utils import apply_patch, commit, get_or_404, reject_null_fields
 from app.models.workspace import Workspace
 from app.schemas.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
 
@@ -42,6 +42,7 @@ def update_workspace(
     workspace_id: UUID, payload: WorkspaceUpdate, db: DbSession
 ) -> Workspace:
     workspace = get_or_404(db, Workspace, workspace_id)
+    reject_null_fields(payload.model_dump(exclude_unset=True), "slug", "name", "settings")
     return commit(db, apply_patch(workspace, payload))
 
 
