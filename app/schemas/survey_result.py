@@ -81,6 +81,7 @@ class Detection(DefectList):
 
 class Frame(Located):
     frame_id: Identifier
+    analysis_note: str | None = Field(default=None, max_length=512)
     media_id: UUID | None = None
     captured_at: datetime | None = None
     detections: list[Detection]

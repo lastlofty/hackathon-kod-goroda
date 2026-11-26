@@ -122,6 +122,7 @@ const captureSurvey = (() => {
           name: shortName(f.frame_id),
           src: url(f.url).href,
           cameraPoint: pointOf(src) || pointOf(f),
+          analysisNote: f.analysis_note,
           time: formatDate(capturedAt),
           capturedAt,
           locationSource: src?.location_source,
@@ -587,7 +588,7 @@ const captureSurvey = (() => {
           .join("") ||
           '<span class="subtle">' +
             (job?.status === "completed"
-              ? (job.result?.source === "dataset" ? "Для этого фото нет строки в таблице." : "Объекты на кадре не обнаружены.")
+              ? (job.result?.source === "dataset" ? "Для этого фото нет строки в таблице." : frame.analysisNote ? "Оценка не завершена." : "Объекты на кадре не обнаружены.")
               : "Ожидаем результат обработки.") +
             "</span>") +
         "</div></section>";
@@ -603,6 +604,7 @@ const captureSurvey = (() => {
       figure +
       review +
       '<div class="record-data"><dl>' +
+      (frame?.analysisNote ? field("Результат анализа кадра", frame.analysisNote) : "") +
       (obj
         ? field(obj.datasetLabel ? "Состояние по таблице" : "Вердикт модели", obj.verdict) +
           (obj.priorityLevel ? field("Приоритет ремонта", obj.priorityLabel) : "") +
