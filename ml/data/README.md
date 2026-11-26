@@ -28,3 +28,21 @@ splits. Unannotated images must not be treated as negative training examples.
 
 For the supplied two archives the expected counts are 62 images, 61 annotated,
 1 unannotated, and 6 labelled folder categories.
+
+## Stage 2: physical asset review
+
+```bash
+python ml/data/review_assets.py ~/Projects/mgts-data/v1
+open ~/Projects/mgts-data/v1/review/index.html # macOS
+```
+
+Review all images and candidate pairs. The local HTML and CSV contain only
+heuristic candidates (64-bit dHash Hamming distance, two nearest neighbors
+per image and identical filenames/bytes); they do not prove identity and can
+miss repeated objects from different viewpoints. Use `asset_review.csv` to
+record physical asset groups and review notes, including uncertainty. Keep
+suspected related samples together or exclude ambiguous samples from evaluation.
+Do not overwrite the manifest or create splits until groups are reviewed.
+The report has no external dependencies and does not modify source data.
+Keep generated reports and photos outside Git. Existing review output is never
+overwritten; rename it if a rerun is necessary.
