@@ -76,13 +76,16 @@ def survey_result(db, survey, jobs):
                     "best_det_id": det_id,
                     "status": attributes.get("priority") or "review",
                     "verdict": attributes.get("verdict"),
-                    "recommendation": finding.recommendation,
                     "defect_score": defect_score,
+                    "priority_level": attributes.get("priority_level"),
+                    "severity": attributes.get("severity"),
+                    "recommendation": finding.recommendation,
                 }
             )
     for obj in objects.values():
         if obj["defects"]:
-            obj["verdict"] = "defect"
+            if obj["verdict"] is None:
+                obj["verdict"] = "defect"
             if obj["status"] == "normal":
                 obj["status"] = "review"
     result = SurveyResult.model_validate(

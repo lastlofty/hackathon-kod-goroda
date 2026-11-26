@@ -1,6 +1,6 @@
 """Opt-in execution of an existing queued detection job, with atomic results."""
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from time import monotonic
 from uuid import UUID
@@ -55,7 +55,7 @@ def evaluate(path: Path, settings: Settings, parameters: dict) -> list[adapter.D
 
 
 def now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def run_job(db: Session, job_id: UUID, settings: Settings) -> ProcessingJob:

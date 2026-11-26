@@ -33,7 +33,7 @@ DefectName = Annotated[
 
 
 def with_defects(value):
-    if not isinstance(value, dict) or ("defect" not in value and "defects" in value):
+    if not isinstance(value, dict) or "defect" not in value:
         return value
     data = dict(value)
     old = data.pop("defect", None)
@@ -58,7 +58,8 @@ class DefectList(BaseModel):
 
     @model_validator(mode="after")
     def unique_types(self):
-        self.defects = list(dict.fromkeys(self.defects))
+        if len(set(self.defects)) != len(self.defects):
+            self.defects = list(dict.fromkeys(self.defects))
         return self
 
 
@@ -85,14 +86,24 @@ class Frame(Located):
     detections: list[Detection]
 
 
+PRIORITY_LEVELS = {1: "Критический", 2: "Высокий", 3: "Средний", 4: "Нет"}
+
+
 class SurveyObject(Located, DefectList):
     description: str | None = Field(None, max_length=2048)
     verdict: Literal["ok", "defect", "unknown"] | None = None
-    recommendation: str | None = None
     object_id: Identifier
     category: Identifier = Field(alias="class")
     defect_score: Score | None = None
     status: Identifier
+    # Приоритет ремонта: 1 — критический (крепление), 2 — высокий (МП),
+    # 3 — средний (коррозия), 4 — дефекта нет. Порядок внутри статуса.
+    priority_level: int | None = Field(default=None, ge=1, le=4)
+    defects: list[DefectName] = Field(
+        default_factory=list, max_length=16
+    )
+    severity: Score | None = None
+    recommendation: str | None = Field(default=None, max_length=1024)
     observations: list[Identifier] = Field(min_length=1)
     best_det_id: Identifier
 

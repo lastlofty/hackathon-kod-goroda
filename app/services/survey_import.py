@@ -172,11 +172,12 @@ def bind_frames(result, inputs, db, workspace_id):
     remaining = {i["id"]: i["name"] for i in by_id.values()}
     bound_ids = set()
     payload = result.model_dump(mode="json", by_alias=True)
-    for obj in payload["objects"]:
-        if obj["verdict"] is None:
-            del obj["verdict"]
-        if obj["recommendation"] is None:
-            del obj["recommendation"]
+    for obj, original in zip(payload["objects"], result.objects, strict=True):
+        for field in ("verdict", "priority_level", "severity", "recommendation"):
+            if obj[field] is None:
+                del obj[field]
+        if "defects" not in original.model_fields_set:
+            del obj["defects"]
     for frame in payload["frames"]:
         for detection in frame["detections"]:
             if detection["inference"] is None:

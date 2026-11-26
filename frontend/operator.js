@@ -12,6 +12,8 @@ const captureSurvey = (() => {
     mock_detection: "Демонстрационное обнаружение",
     pole: "Опора",
     cable: "Кабель",
+    TKSH: "ТКШ",
+    RSH: "РЩ",
     open: "Открытый люк",
     urgent: "Срочно",
     review: "На проверку",
@@ -77,6 +79,9 @@ const captureSurvey = (() => {
   let saving = false;
   const demoReviewsKey = "mgts-demo-defect-reviews-v1";
   const priorityRank = { urgent: 0, review: 1, unverified: 2, normal: 3 };
+  const levelNames = { 1: "Критический", 2: "Высокий", 3: "Средний", 4: "Нет" };
+  const levelLabel = (level) =>
+    Object.hasOwn(levelNames, level) ? "P" + level + " · " + levelNames[level] : "—";
   const activeId = () => job?.id || "new";
   const pointOf = (value) =>
     hasPoint(value) ? [value.lon, value.lat] : undefined;
@@ -173,6 +178,9 @@ const captureSurvey = (() => {
         issue: defectText(o),
         defects: defectsOf(o),
         verdict: verdict(o),
+        priorityLevel: o.priority_level,
+        priorityLabel: o.priority_level ? levelLabel(o.priority_level) : undefined,
+        severity: o.severity,
         hasDefect: o.verdict === "defect" ||
           (o.verdict == null && defectsOf(o).length > 0),
         recommendation: o.recommendation || best?.box.inference?.recommendation,
@@ -186,6 +194,8 @@ const captureSurvey = (() => {
     objects.sort(
       (a, b) =>
         priorityRank[a.priority] - priorityRank[b.priority] ||
+        (a.priorityLevel ?? 5) - (b.priorityLevel ?? 5) ||
+        (b.severity ?? -1) - (a.severity ?? -1) ||
         (b.confidence ?? -1) - (a.confidence ?? -1) ||
         a.id.localeCompare(b.id),
     );
@@ -395,8 +405,10 @@ const captureSurvey = (() => {
   function reviewFields(obj) {
     const values = reviewed(obj) === "confirmed" ? defectsOf(obj.inspectionReview) : defectsOf(obj);
     if (["ТКШ", "РЩ"].includes(obj.type)) {
+      const choices = new Map(cabinetTypes.map(type => [type.toLowerCase(), type]));
+      for (const value of values) choices.set(value.toLowerCase(), value);
       return '<fieldset id="cabinet-defects"><legend>Дефекты</legend>' +
-        [...new Set([...cabinetTypes, ...values])].map(value =>
+        [...choices.values()].map(value =>
           '<label><input type="checkbox" value="' + escapeHTML(value) + '"' +
           (values.includes(value) ? " checked" : "") + "> " + escapeHTML(label(value)) + "</label>"
         ).join("") + "</fieldset>";
@@ -593,6 +605,8 @@ const captureSurvey = (() => {
       '<div class="record-data"><dl>' +
       (obj
         ? field(obj.datasetLabel ? "Состояние по таблице" : "Вердикт модели", obj.verdict) +
+          (obj.priorityLevel ? field("Приоритет ремонта", obj.priorityLabel) : "") +
+          (obj.severity != null ? field("Оценка опасности", percent(obj.severity)) : "") +
           field("Дефекты", obj.issue || "—") +
           (obj.description ? field("Описание из таблицы", obj.description) : "") +
           (obj.recommendation ? field("Рекомендация по объекту", obj.recommendation) : "") +
@@ -735,11 +749,12 @@ const captureSurvey = (() => {
             escapeHTML(o.type + " · " + displayId(o)) +
             "</strong><p>" +
             escapeHTML(
-              [o.verdict, o.issue, reviewLabel(o), defectText(o.inspectionReview)]
+              [o.priorityLabel, o.verdict, o.issue, reviewLabel(o), defectText(o.inspectionReview)]
                 .filter(Boolean)
                 .join(" · "),
             ) +
-            "</p><p>" +
+            "</p>" +
+            "<p>" +
             escapeHTML(o.place || formatPoint(o.assetPoint || o.point)) +
             "</p>" +
             (o.recommendation ? "<p>Рекомендация: " + escapeHTML(o.recommendation) + "</p>" : "") +
