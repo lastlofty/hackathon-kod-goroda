@@ -22,7 +22,7 @@ Mock is enabled only explicitly. Default `docker compose up` keeps inference dis
 3. `POST /api/v1/jobs/{job_id}/run` (no body). An explicit, synchronous executor for already queued detection jobs. Successful HTTP 200 returns JobRead with `status=succeeded` or `status=failed` and `error_message` when the inference attempt fails. HTTP 409 means state/pipeline conflict, 422 invalid local media, 503 disabled.
 4. `GET /api/v1/findings?job_id=UUID`; existing `GET /api/v1/inspection/frames?workspace=slug` and `/inspection/stream` expose persisted findings to the frontend.
 
-Only locally uploaded image URLs are accepted; remote URLs are intentionally not fetched. For the MVP, results are written transactionally with job completion. Normal repeat calls to `/run` are rejected after claiming. There is no automatic worker, retry or lease: a crash may leave a job running. Do not manually modify a managed running job using the generic PATCH/DELETE API or reset completed jobs to queued; create a new job for a deliberate re-run. The frontend must explicitly call the new run route if it wants this executor; existing upload/job creation behaviour is unchanged. No frontend changes in this patch.
+The single-job endpoint processes locally uploaded images and commits findings with the terminal job state. Repeat runs of a claimed job return 409. The survey upload form submits an optional inference mode. Its background executor invokes the same job service for each photograph and publishes the resulting frames and objects to the survey registry. See [the operator contract](operator-contract.md).
 
 ## CV engineer: exact integration points
 

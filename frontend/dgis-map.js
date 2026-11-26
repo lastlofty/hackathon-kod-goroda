@@ -248,7 +248,7 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
   const api = await loadDgisSdk();
   const choices = routes.length ? routes : (route.length > 1 ? [{points: route}] : []);
   const focus = choices.length ? choices.flatMap(choice => choice.points) : points;
-  const center = focus[Math.floor(focus.length / 2)] ?? [0, 0];
+  const center = focus[Math.floor(focus.length / 2)] ?? [37.61, 55.76];
   let map;
   let vehicle;
   let carIcon;
@@ -329,7 +329,7 @@ async function initDgisMap({container, key, route, routes = [], points = [], mar
   const fitPoints = (coordinates, duration) => fitDgisPoints(map, coordinates, duration);
 
   try {
-    map = await createDgisStreetMap(api, container, key, center, focus.length ? 15 : 1);
+    map = await createDgisStreetMap(api, container, key, center, focus.length ? 15 : 13);
     fitPoints(focus, 0);
     for (const choice of choices) lines.set(choice, drawRouteLine(map, choice.points));
     styleRoutes();

@@ -350,7 +350,7 @@ button.path-shape .path-ink,.editor-image[data-mode="edit"] .path-ink { pointer-
 .overview-grid section { min-width:0; background:var(--paper); border:1px solid var(--line); border-radius:7px; overflow:hidden }
 .overview h2 { font-size:17px; line-height:1.25; letter-spacing:-.02em; margin:16px 18px 12px }
 .overview-plot { position:relative; isolation:isolate; border-block:1px solid var(--line); background:#151c24 }
-#overview-map { width:100%; height:clamp(255px,34vh,380px); background:#151c24; touch-action:none; overscroll-behavior:contain }
+#overview-map, #capture-overview-map { width:100%; height:clamp(255px,34vh,380px); background:#151c24; touch-action:none; overscroll-behavior:contain }
 .overview-map-number { padding:0; cursor:pointer; display:grid; place-items:center; width:22px; height:22px; box-sizing:border-box; border:2px solid; border-radius:50%; background:#102233; color:white; font:600 12px/1 sans-serif }
 #overview-map-notice { position:absolute; z-index:1000; left:8px; bottom:6px; padding:3px 6px; background:#151c24; color:var(--muted) }
 .overview ul { list-style:none; margin:0; padding:0 }
@@ -396,3 +396,21 @@ button.path-shape .path-ink,.editor-image[data-mode="edit"] .path-ink { pointer-
 .finding-meta small { color:var(--muted) }
 #finding-actions { flex-wrap:wrap }
 #finding-actions kbd { margin-left:4px; opacity:.8 }
+
+#import { width:min(500px,calc(100% - 24px)) }
+#import .file-field { display:grid; gap:8px }
+#import progress { width:100% }
+#import .error { color:var(--urgent) }
+#job-select { max-width:min(42vw,285px) }
+.review-buttons #defect { width:clamp(80px,12vw,165px); min-width:0 }
+.frame-tools label { color:var(--muted);font-size:11px;min-width:0 }
+.frame-tools select { max-width:145px }
+
+@media(max-width:480px) {
+  .topbar { grid-template-columns:1fr auto; padding-block-start:4px }
+  .topbar .identity { grid-column:1; grid-row:1 }
+  .topbar #upload { grid-column:2; grid-row:1 }
+  .topbar nav { grid-column:1/-1; grid-row:2; justify-self:stretch }
+  .topbar nav button { flex:1; min-height:32px }
+  .survey-bar:has(#status:not([hidden])) #status { grid-column:1/-1 }
+}

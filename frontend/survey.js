@@ -1,6 +1,6 @@
 'use strict';
 
-const reviewNames = {confirmed: 'Подтверждено', unseen: 'Не видно на кадре'};
+const reviewNames = {rejected:'Дефекта нет', confirmed: 'Подтверждено', unseen: 'Не видно на кадре'};
 let queueOnly = false;
 let noteTarget;
 
@@ -45,7 +45,8 @@ async function copyRecordLink() {
   const routeId = record.routeId || currentSurveyRoute()?.id;
   if (routeId) params.set('route', routeId);
   if (record.frame) params.set('frame', record.frame);
-  const url = new URL(location.pathname, location.origin);
+  const url = new URL(location.href);
+  if (typeof captureSurvey !== 'undefined') url.searchParams.set('survey', $('job-select').value);
   url.hash = params.toString();
   try {
     await navigator.clipboard.writeText(url.href);
@@ -84,6 +85,7 @@ function openSurveyRecord(record, preferredRoute) {
 }
 
 function reviewShortcut(event) {
+  if (typeof captureSurvey !== 'undefined') return;
   if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.altKey ||
       event.metaKey || event.shiftKey || state.view !== 'map' || state.pin || document.querySelector('dialog[open]') ||
       event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
@@ -163,6 +165,7 @@ function routeCapturePositions(route, onlyLive = false) {
 }
 
 function renderDeck() {
+  if (typeof captureSurvey !== 'undefined') return captureSurvey.renderDeck();
   buildClassFilters();
   syncLiveSelection();
   const route = currentSurveyRoute();
@@ -235,6 +238,7 @@ function openReviewNote() {
 
 function needsFollowup(record) {
   const review = record.inspectionReview;
+  if (['confirmed','rejected'].includes(review?.decision)) return false;
   return Boolean(review?.note || review?.decision === 'unseen' || (review?.decision !== 'confirmed' &&
     (['urgent','review'].includes(record.priority) || (Number.isFinite(record.confidence) && record.confidence < 70))));
 }

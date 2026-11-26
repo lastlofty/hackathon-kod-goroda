@@ -62,6 +62,7 @@ function boxHTML(box, selected = false, editable = false, frameId) {
 }
 
 function showRecord(id, move = false) {
+  if (typeof captureSurvey !== "undefined") return captureSurvey.selectObject(id, move);
   const record = visibleObjects().find(item => item.id === id);
   if (!record) {
     announce('Объект недоступен при текущем фильтре.');
@@ -132,6 +133,7 @@ async function showPointAddress(record, field, fallback) {
 }
 
 function renderSelection() {
+  if (typeof captureSurvey !== "undefined") return captureSurvey.renderCard();
   const visible = visibleObjects();
   const record = visible.find(item => item.id === state.selected) || visible[0];
   if (state.focusRecord !== record?.id) state.focusBox = null;
@@ -192,18 +194,19 @@ function renderSelection() {
 }
 
 function renderTotals() {
-  const review = records.objects.filter(record => record.priority === 'review' || record.priority === 'urgent').length;
+  const review = records.objects.filter(record => (record.priority === 'review' || record.priority === 'urgent') && !['confirmed','rejected'].includes(record.inspectionReview?.decision)).length;
   const urgent = records.objects.filter(record => record.priority === 'urgent').length;
   $('totals').innerHTML = `<span class="total"><b>${records.objects.length}</b> объектов</span><span class="total"><b>${review}</b> к проверке</span><span class="total danger"><b>${urgent}</b> срочно</span>`;
 }
 
 function renderList() {
   if (state.view === 'overview') { renderOverview(); return; }
+  if (typeof captureSurvey !== 'undefined' && state.view === 'history') { captureSurvey.renderHistory(); return; }
   const exportButton = '<button class="table-link" data-action="export-json">Скачать JSON</button>';
   if (state.view === 'registry') {
-    const listed = queueOnly ? records.objects.filter(needsFollowup).sort((a,b) => (a.confidence ?? 101) - (b.confidence ?? 101)) : records.objects;
-    const rows = listed.map(record => `<tr><td class="mono">${escapeHTML(displayId(record))}</td><td><span class="file-cell">${queueOnly && frameById(record.frame) ? `<img src="${escapeHTML(frameById(record.frame).src)}" alt="">` : ''}${escapeHTML(recordLabel(record))}</span></td><td>${escapeHTML(record.issue ?? '—')}</td><td>${status(record)}</td><td>${escapeHTML(record.inspectionReview?.note || reviewNames[record.inspectionReview?.decision] || '—')}</td><td>${escapeHTML(record.place || formatPoint(record.point))}</td><td><button class="table-link" data-record="${escapeHTML(record.id)}">${isValidPoint(record.point) ? 'На карте ↗' : 'Карточка ↗'}</button></td></tr>`).join('');
-    $('list-view').innerHTML = `<div class="queue-tools"><button class="button" data-action="queue" aria-pressed="${queueOnly}">Требуют проверки · ${records.objects.filter(needsFollowup).length}</button></div><div class="table-shell"><table><thead><tr><th>ID</th><th>Объект</th><th>Признак</th><th>Статус</th><th>Проверка кадра</th><th>Место</th><th>Просмотр</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Очередь пуста.</td></tr>'}</tbody></table></div>`;
+    const listed = queueOnly ? records.objects.filter(needsFollowup) : records.objects;
+    const rows = listed.map(record => `<tr><td class="mono">${escapeHTML(displayId(record))}</td><td><span class="file-cell">${queueOnly && frameById(record.frame) ? `<img src="${escapeHTML(frameById(record.frame).src)}" alt="">` : ''}${escapeHTML(recordLabel(record))}</span></td><td>${escapeHTML([record.verdict, record.issue].filter(Boolean).join(' · ') || '—')}</td><td>${status(record)}</td><td>${escapeHTML([reviewNames[record.inspectionReview?.decision], record.inspectionReview?.defect || record.inspectionReview?.note].filter(Boolean).join(' · ') || '—')}</td><td>${escapeHTML(record.place || formatPoint(record.point))}</td><td><button class="table-link" data-record="${escapeHTML(record.id)}">${isValidPoint(record.point) ? 'На карте ↗' : 'Карточка ↗'}</button></td></tr>`).join('');
+    $('list-view').innerHTML = `<div class="queue-tools"><button class="button" data-action="queue" aria-pressed="${queueOnly}">Требуют проверки · ${records.objects.filter(needsFollowup).length}</button></div><div class="table-shell"><table><thead><tr><th>ID</th><th>Объект</th><th>Признак</th><th>Статус</th><th>Решение оператора</th><th>Место</th><th>Просмотр</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Очередь пуста.</td></tr>'}</tbody></table></div>`;
     return;
   }
   const rows = records.frames.map(frame => `<tr><td><span class="file-cell"><img src="${escapeHTML(frame.src)}" alt="">${escapeHTML(frame.name)}</span></td><td class="mono">${escapeHTML(frame.time)}</td><td>${frame.boxes.length}</td><td>${records.objects.filter(record => record.frame === frame.id).length}</td><td><button class="table-link" data-frame="${escapeHTML(frame.id)}">Открыть кадр ↗</button></td><td><button class="table-link" data-place="${escapeHTML(frame.id)}">Поставить точку</button></td></tr>`).join('');
@@ -221,7 +224,7 @@ function switchView(view) {
   const pageTitle = $('page-title');
   pageTitle.textContent = {registry: 'Реестр объектов', history: 'История снимков'}[view] ?? '';
   pageTitle.parentElement.hidden = view === 'map';
-  $('route-report').hidden = !currentSurveyRoute() || view !== 'map';
+  $('route-report').hidden = typeof captureSurvey !== 'undefined' ? !records.objects.length || view !== 'map' : !currentSurveyRoute() || view !== 'map';
   document.querySelectorAll('[data-view]').forEach(button => button.setAttribute('aria-pressed', button.dataset.view === view));
   if (view === 'map') {
     if (mapStartDeferred) { mapStartDeferred = false; startMap(); }
@@ -307,16 +310,17 @@ function displayedRoute() {
 function setMapStatus() {
   const statusElement = $('map-status');
   const connected = Boolean(inspectionMap);
+  const surveyMode = typeof captureSurvey !== 'undefined';
   const message = state.pin ? (state.moveId ? 'Выберите новое место точки. Esc — отмена.' : 'Нажмите на карту, чтобы сохранить точку.') :
     mapLoading ? 'Загрузка карты…' :
     mapError ? mapErrorMessages[mapError] : connected ? (routeUnavailable ? 'Не удалось построить автомобильный маршрут.' : '') :
-    'Подключите карту, чтобы открыть маршрут и точки.';
+    'Подключите карту, чтобы увидеть точки съёмки.';
   statusElement.textContent = message;
   statusElement.hidden = !message;
   $('pin-button').setAttribute('aria-pressed', state.pin);
-  $('pin-button').hidden = !connected;
+  $('pin-button').hidden = !connected || surveyMode;
   const hasRoute = displayedRoute().length > 1;
-  $('fit-button').hidden = !connected || !hasRoute && !records.objects.some(record => isValidPoint(record.point));
+  $('fit-button').hidden = !connected || !hasRoute && !(surveyMode ? captureSurvey.mapPoints().length : records.objects.some(record => isValidPoint(record.point)));
   $('fit-button').textContent = drivingRoutes.length > 1 ? 'Все маршруты' : hasRoute ? 'Весь маршрут' : 'Все точки';
   $('provider-zoom').hidden = !connected;
   $('map').classList.toggle('map-active', connected);
@@ -335,6 +339,7 @@ function createMarkerButton(record) {
 }
 
 function renderMarkers() {
+  if (typeof captureSurvey !== "undefined") return captureSurvey.markMap();
   inspectionMap?.setMarkers(visibleObjects().filter(record => isValidPoint(record.point)), state.selected);
 }
 
@@ -424,9 +429,10 @@ async function startMap() {
         $('route-hover').hidden = !choice;
         $('route-hover').textContent = choice ? choice.name + ' · ' + (choice.distance / 1000).toLocaleString('ru-RU', {maximumFractionDigits:1}) + ' км' : '';
       },
-      points: records.objects.map(record => record.point).filter(isValidPoint),
+      points: typeof captureSurvey !== 'undefined' ? captureSurvey.mapPoints().map(group=>group.point) : records.objects.map(record => record.point).filter(isValidPoint),
       markerButton: createMarkerButton,
       onSelect: id => {
+        if (typeof captureSurvey !== "undefined") { captureSurvey.openPoint(id); return; }
         const record = records.objects.find(item => item.id === id);
         if (state.pin && isValidPoint(record?.point)) addPoint(record.point);
         else showRecord(id);
@@ -448,6 +454,7 @@ async function startMap() {
   mapLoading = false;
   setMapStatus();
   renderMarkers();
+  if (typeof captureSurvey !== 'undefined') captureSurvey.fit();
 }
 
 function resetPin() {
@@ -520,7 +527,7 @@ function deletePoint() {
   const record = records.objects.find(item => item.id === state.selected);
   if (!record || !isValidPoint(record.point)) return;
   const manual = record.origin === 'manual';
-  const question = manual ? 'Удалить ручную отметку из карты и реестра?' : 'Удалить точку с карты? Карточка объекта и рамки останутся в реестре.';
+  const question = manual ? 'Удалить ручную отметку из карты и реестра?' : 'Удалить точку с карты? Объект и рамки останутся в реестре.';
   if (!window.confirm(displayId(record) + ' · ' + question)) return;
   resetPin();
   recordChange('Точка удалена', record);
@@ -548,6 +555,7 @@ function startGeometry(mode) {
 }
 
 function openEditor(id, preferredBox) {
+  if (typeof captureSurvey !== "undefined") return captureSurvey.selectFrame(id, false);
   const frame = frameById(id);
   if (!frame) return;
   drivePlayer?.pause();
@@ -984,8 +992,8 @@ function download(content,type,name) {
 }
 
 function exportCSV() {
-  const rows = [['ID','Объект','Признак','Статус','Место','Широта','Долгота','Источник']];
-  for (const r of records.objects) rows.push([displayId(r),recordLabel(r),r.issue ?? '',priorities[priorityOf(r)],r.place,r.point?.[1] ?? '',r.point?.[0] ?? '',r.source?.url ?? '']);
+  const rows = [['ID','Объект','Признак','Статус','Место','Широта съёмки','Долгота съёмки','Источник','Вердикт модели','Уверенность в дефекте, %','Решение оператора','Тип дефекта по проверке','Широта объекта','Долгота объекта']];
+  for (const r of records.objects) rows.push([displayId(r),recordLabel(r),r.issue ?? '',priorities[priorityOf(r)],r.place ?? '',r.point?.[1] ?? '',r.point?.[0] ?? '',r.source?.url ?? '',r.verdict ?? '',r.confidence ?? '',reviewNames[r.inspectionReview?.decision] ?? '',r.inspectionReview?.defect ?? '',r.assetPoint?.[1] ?? '',r.assetPoint?.[0] ?? '']);
   const text = rows.map(row => row.map(value => '"' + String(value).replaceAll('"','""') + '"').join(';')).join('\r\n');
   download('\ufeff' + text,'text/csv;charset=utf-8','mgts-objects.csv');
 }
@@ -995,6 +1003,7 @@ function exportJSON() {
 }
 
 function step(direction) {
+  if (typeof captureSurvey !== "undefined") return captureSurvey.step(direction);
   const visible = visibleObjects();
   if (!visible.length) return;
   const index = visible.findIndex(record => record.id === state.selected);
@@ -1045,7 +1054,7 @@ const actions = {
   'full-frame': () => { state.focusBox = null; renderSelection(); },
   'share-record': copyRecordLink, note: openReviewNote, 'close-note': () => $('review-note').close(),
   queue: () => { queueOnly = !queueOnly; renderList(); },
-  'route-report': reportRoute, 'close-report': () => $('report-dialog').close(),
+  'route-report': () => typeof captureSurvey !== 'undefined' ? captureSurvey.report() : reportRoute(), 'close-report': () => $('report-dialog').close(),
   'route-atlas': openRouteAtlas, 'close-atlas': () => $('atlas-dialog').close(),
   'print-atlas': printRouteAtlas, 'route-geojson': exportRouteGeoJSON, 'print-report': async () => {
     const images = $('report-body').querySelectorAll('img, survey-crop');
@@ -1053,6 +1062,7 @@ const actions = {
     if ($('report-dialog').open) window.print();
   },
   fit: () => {
+    if (typeof captureSurvey !== 'undefined') { captureSurvey.fit(); return; }
     drivePlayer?.exit();
     const route = state.filter === 'retake' ? retakeStops().map(r => r.point).filter(isValidPoint) : drivingRoutes.length > 1 ? drivingRoutes.flatMap(choice => choice.points) : displayedRoute();
     if (route.length === 1) inspectionMap?.panTo(route[0]);
@@ -1110,7 +1120,7 @@ const actions = {
       $('box-json-error').textContent = error.message;
     }
   },
-  upload: () => { $('upload-message').textContent = 'Снимок откроется для ручной разметки.'; $('upload-dialog').showModal(); },
+  upload: () => { if (typeof captureSurvey !== 'undefined') return captureSurvey.openUpload(); $('upload-message').textContent = 'Снимок откроется для ручной разметки.'; $('upload-dialog').showModal(); },
   'close-upload': () => $('upload-dialog').close(), export: exportCSV, 'export-json': exportJSON
 };
 
@@ -1305,4 +1315,5 @@ async function loadInspection() {
 bindCrewTools();
 bindSurveyTools();
 bindFieldwork();
-loadInspection();
+if (typeof captureSurvey !== 'undefined') captureSurvey.start();
+else loadInspection();

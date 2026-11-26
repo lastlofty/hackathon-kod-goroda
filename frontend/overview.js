@@ -133,6 +133,7 @@ function overviewRouteRow(route,index,parts) {
 }
 
 function renderOverview() {
+  if (typeof captureSurvey !== "undefined") return captureSurvey.overview();
   const routes=overviewRoutes();
   const parts=routes.map(routeSections);
   const counts=Object.fromEntries(Object.keys(sectionColors).map(key=>[key,0]));

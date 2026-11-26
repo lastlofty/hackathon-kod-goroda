@@ -1,5 +1,7 @@
 # Схема базы данных
 
+Схема обследования, включая решения операторов и связи кадра с объектом, приведена в [контракте CV](operator-contract.md).
+
 ## Связи
 
 ```mermaid
@@ -14,6 +16,7 @@ erDiagram
     ENTITIES o|--o{ FINDINGS : describes
     MEDIA o|--o{ FINDINGS : source_for
     PROCESSING_JOBS o|--o{ FINDINGS : produces
+    PROCESSING_JOBS ||--o{ DEFECT_REVIEWS : reviews
 
     WORKSPACES {
         uuid id PK

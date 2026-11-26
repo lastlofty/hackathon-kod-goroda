@@ -8,12 +8,12 @@
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=f538b2587a28">
-<script defer src="./dgis-map.js?v=b865a7924945"></script>
+<link rel="stylesheet" href="./styles.css?v=2b993b41efd6">
+<script defer src="./dgis-map.js?v=e899419ddde8"></script>
 <script defer src="./drive.js?v=308d7e01209c"></script>
 <script defer src="./backend-api.js?v=4a45d03e5f93"></script>
 <script defer src="./inspection-feed.js?v=d09171e2deb6"></script>
-<script defer src="./survey.js?v=57350d97e7a8"></script>
+<script defer src="./survey.js?v=56ce58cc69a3"></script>
 <script defer src="./fieldwork.js?v=c731c3244cd2"></script>
 <script defer src="./live-survey.js?v=2fd92c219ad3"></script>
 <script defer src="./vendor/fflate-0.8.2.js"></script>
@@ -23,8 +23,9 @@
 <script defer src="./crew.js?v=96a87b6e4776"></script>
 <script defer src="./finding-queue.js?v=04308928bbc3"></script>
 <script defer src="./overview-retakes.js?v=683f619aea6a"></script>
-<script defer src="./overview.js?v=85404f1766f2"></script>
-<script defer src="./app.js?v=89972faaeddb"></script>
+<script defer src="./overview.js?v=c7b7593660ec"></script>
+<script defer src="./operator.js?v=a8f18c786828"></script>
+<script defer src="./app.js?v=e2330fe41150"></script>
 </head>
 <body>
 <header class="topbar">
@@ -35,18 +36,19 @@
     <button data-view="registry" aria-pressed="false">Реестр</button>
     <button data-view="history" aria-pressed="false">История</button>
   </nav>
-  <button class="button primary" data-action="upload" disabled>Загрузить фото</button>
+  <button class="button primary" data-action="upload" id="upload" disabled>Загрузить съёмку</button>
 </header>
 <main>
   <header class="survey-bar">
     <div class="survey-title" hidden><h1 id="page-title"></h1></div>
+    <div id="status" class="subtle" role="status" hidden></div>
     <div class="totals" id="totals" aria-label="Сводка обследования"></div>
-    <button class="button" id="route-report" data-action="route-report" hidden>Отчёт по маршруту</button>
-    <button class="button" data-action="export">Экспорт CSV</button>
+    <button class="button" id="route-report" data-action="route-report" hidden>Отчёт по обследованию</button>
+    <button class="button" id="survey-export" data-action="export">Экспорт CSV</button>
   </header>
-  <section id="map-view" class="map-view" aria-label="Карта и карточка объекта">
+  <section id="map-view" class="map-view" aria-label="Карта и сведения об объекте">
     <div class="map-workspace">
-      <div class="route-bar"><h2>Карта маршрута</h2><label id="route-picker" class="route-picker" hidden>Маршрут
+      <div class="route-bar"><h2>Карта обследования</h2><label class="route-picker">Обследование <select id="job-select" aria-label="Выбрать обследование"><option value="new">Новое обследование</option></select></label><label id="route-picker" class="route-picker" hidden>Маршрут
           <select id="route-select" aria-label="Выбрать маршрут"></select>
         </label></div>
     <div class="map-area">
@@ -54,24 +56,24 @@
       <div id="route-schematic" aria-hidden="true" hidden></div>
       <div class="map-controls">
         <div class="map-tools">
-        <button type="button" class="button" id="section-toggle" aria-pressed="false">Участки · 100 м</button>
-        <button class="button" id="retake-toggle" data-action="retakes" aria-pressed="false">Что переснять</button>
+        <button type="button" class="button" id="section-toggle" hidden aria-pressed="false">Участки · 100 м</button>
+        <button class="button" id="retake-toggle" hidden data-action="retakes" aria-pressed="false">Что переснять</button>
         <button class="button" data-action="fit" id="fit-button" hidden>Весь маршрут</button>
         <button class="button" data-action="pin" id="pin-button" aria-pressed="false" hidden>+ Поставить точку</button>
         <button class="button" type="button" data-action="map-settings" id="map-provider">Подключить карту</button>
         </div>
         <div id="route-hover" class="route-hover" hidden></div>
-        <div id="map-status" class="map-status" role="status">Подключите карту, чтобы открыть маршрут и точки.</div>
+        <div id="map-status" class="map-status" role="status">Подключите карту, чтобы увидеть места съёмки.</div>
       </div>
       <div id="provider-zoom" class="provider-zoom" hidden>
         <button class="button icon" type="button" data-action="zoom-in" aria-label="Приблизить">+</button>
         <button class="button icon" type="button" data-action="zoom-out" aria-label="Отдалить">−</button>
       </div>
     </div>
-      <section class="route-deck" aria-label="Просмотр кадров маршрута">
+      <section class="route-deck" aria-label="Просмотр кадров съёмки">
         <div id="section-strip" role="group" aria-label="Участки маршрута по приоритету" hidden></div>
         <div id="retake-list" hidden></div>
-        <div class="deck-head"><h2 id="deck-title">Кадры маршрута</h2><button type="button" class="button" id="live-toggle" aria-pressed="false">Следить за проездом</button><button type="button" class="button" id="live-event" hidden>Отметить событие</button><span id="live-status" role="status" hidden></span><button type="button" class="button" id="live-return" hidden>К последнему кадру</button><span id="route-count" class="mono" aria-live="polite"></span></div>
+        <div class="deck-head"><h2 id="deck-title">Кадры съёмки</h2><button type="button" class="button" id="live-toggle" hidden aria-pressed="false">Следить за проездом</button><button type="button" class="button" id="live-event" hidden>Отметить событие</button><span id="live-status" role="status" hidden></span><button type="button" class="button" id="live-return" hidden>К последнему кадру</button><span id="route-count" class="mono" aria-live="polite"></span></div>
         <div class="route-time">
           <div id="drive-panel" class="drive-panel" aria-label="Демо-проезд" hidden>
             <button id="drive-play" type="button" class="button">Проезд 3D</button>
@@ -186,7 +188,7 @@
     <p id="compare-message" role="status"></p>
   </div>
 </dialog>
-<dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-head"><h2 id="report-title">Отчёт по маршруту</h2><button class="button icon" data-action="close-report" aria-label="Закрыть">×</button></div><label class="report-filter"><input type="checkbox" id="problems-only"> Только проблемы</label><div id="report-body"></div><div class="dialog-foot"><button class="button" data-action="route-geojson">Скачать GeoJSON</button><button class="button" data-action="route-atlas">Печать маршрута</button><button class="button primary" data-action="print-report">Печать отчёта</button></div></dialog>
+<dialog id="report-dialog" aria-labelledby="report-title"><div class="dialog-head"><h2 id="report-title">Отчёт по обследованию</h2><button class="button icon" data-action="close-report" aria-label="Закрыть">×</button></div><label class="report-filter"><input type="checkbox" id="problems-only"> Только проблемы</label><div id="report-body"></div><div class="dialog-foot"><button class="button" data-action="route-geojson">Скачать GeoJSON</button><button class="button" data-action="route-atlas">Печать маршрута</button><button class="button primary" data-action="print-report">Печать отчёта</button></div></dialog>
 <dialog id="atlas-dialog" aria-labelledby="atlas-title">
   <div class="dialog-head"><h2 id="atlas-title">Атлас маршрута</h2><button class="button icon" data-action="close-atlas" aria-label="Закрыть атлас">×</button></div>
   <div id="atlas-body"></div>
@@ -210,6 +212,36 @@
     <div class="dialog-foot"><button class="button" type="button" data-action="reset-map-key" id="map-key-reset" hidden>Сбросить ключ</button><button class="button primary" type="submit">Подключить</button></div>
   </form>
 </dialog>
+    <dialog id="import">
+      <div class="dialog-head"><h2>Загрузить съёмку</h2></div><div class="file-field">
+      <p class="muted">
+        Выберите фото, видео или папку YOLO Detection. Можно добавить GPX-трек и
+        JSON с результатом модели.
+      </p>
+      <input
+        type="file"
+        id="files"
+        multiple
+        accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.gpx,.json,.yaml,.yml,.txt"
+        hidden
+      /><input type="file" id="folder" webkitdirectory multiple hidden />
+      <div class="actions">
+        <button class="button" id="pick-files">Выбрать файлы</button
+        ><button class="button" id="pick-folder">Выбрать папку</button>
+      </div>
+      <p id="chosen"></p>
+      <label class="filter-label" id="inference-option" hidden>
+        <input type="checkbox" id="run-detection">
+        <span id="inference-label"></span>
+      </label>
+      <progress id="upload-progress" hidden></progress>
+      <p id="import-error" class="error" role="alert"></p>
+      </div><div class="dialog-foot">
+        <button class="button primary" id="submit" disabled>Загрузить</button
+        ><button class="button" id="cancel">Закрыть</button>
+      </div>
+    </dialog>
+
 <output id="notice" class="notice" role="status" hidden></output>
 </body>
 </html>

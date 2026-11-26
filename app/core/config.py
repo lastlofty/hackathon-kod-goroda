@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     triton_timeout_seconds: float = Field(default=30, gt=0, le=120)
     upload_dir: Path = Path("uploads")
     max_upload_size_mb: int = Field(default=25, ge=1, le=500)
+    dgis_browser_key: str = ""
     dgis_api_key: SecretStr | None = None
     dgis_base_url: str = "https://catalog.api.2gis.com"
     dgis_locale: str = "ru_RU"

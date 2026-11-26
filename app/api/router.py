@@ -9,6 +9,7 @@ from app.api import (
     inspection_feed,
     jobs,
     media,
+    surveys,
     workspaces,
 )
 
@@ -22,3 +23,4 @@ api_router.include_router(jobs.router)
 api_router.include_router(findings.router)
 api_router.include_router(geocoding.router)
 api_router.include_router(inspection_feed.router)
+api_router.include_router(surveys.router)
