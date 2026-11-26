@@ -1,0 +1,298 @@
+{
+  "uid": "mgts-triton",
+  "title": "MGTS — Triton monitoring",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "tags": [
+    "mgts",
+    "triton"
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Triton scrape status",
+      "description": "1 = scrape successful; 0 = unavailable. Not model readiness.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mgts-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"triton\"}",
+          "legendFormat": "{{instance}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "GPU utilization",
+      "description": "Device-wide utilization; may include other processes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mgts-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * nv_gpu_utilization{job=\"triton\"}",
+          "legendFormat": "{{gpu_uuid}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "GPU memory used / total",
+      "description": "Device-wide memory, not just Triton.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mgts-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "nv_gpu_memory_used_bytes{job=\"triton\"}",
+          "legendFormat": "used {{gpu_uuid}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "nv_gpu_memory_total_bytes{job=\"triton\"}",
+          "legendFormat": "total {{gpu_uuid}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Successful model requests / s",
+      "description": "Requests per model, not unique images or end-to-end jobs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mgts-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model, version) (rate(nv_inference_request_success{job=\"triton\"}[1m]))",
+          "legendFormat": "{{model}} v{{version}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Failed model requests / s",
+      "description": "Failure rates per model, summed across reason labels.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mgts-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (model, version) (rate(nv_inference_request_failure{job=\"triton\"}[1m]))",
+          "legendFormat": "{{model}} v{{version}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Mean Triton request latency",
+      "description": "Mean server request latency; no data/NaN without traffic. Excludes client preprocessing and database. Not a percentile.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mgts-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (model, version) (rate(nv_inference_request_duration_us{job=\"triton\"}[1m])) / sum by (model, version) (rate(nv_inference_request_success{job=\"triton\"}[1m]))) / 1000",
+          "legendFormat": "{{model}} v{{version}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Mean Triton queue time",
+      "description": "Mean queue time per successful request; no meaningful value without traffic.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mgts-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum by (model, version) (rate(nv_inference_queue_duration_us{job=\"triton\"}[1m])) / sum by (model, version) (rate(nv_inference_request_success{job=\"triton\"}[1m]))) / 1000",
+          "legendFormat": "{{model}} v{{version}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "GPU power",
+      "description": "Available if the GPU/driver exports power metrics.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mgts-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "nv_gpu_power_usage{job=\"triton\"}",
+          "legendFormat": "{{gpu_uuid}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "mgts-prometheus"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt"
+        },
+        "overrides": []
+      },
+      "options": {}
+    }
+  ]
+}
