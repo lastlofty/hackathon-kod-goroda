@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
 from app.api.deps import DbSession
-from app.api.utils import apply_patch, commit, get_or_404
+from app.api.utils import apply_patch, commit, get_or_404, reject_null_fields
 from app.models.entity import Entity
 from app.models.finding import Finding
 from app.models.job import ProcessingJob
@@ -80,6 +80,7 @@ def get_finding(finding_id: UUID, db: DbSession) -> Finding:
 def update_finding(finding_id: UUID, payload: FindingUpdate, db: DbSession) -> Finding:
     finding = get_or_404(db, Finding, finding_id)
     changes = payload.model_dump(exclude_unset=True)
+    reject_null_fields(changes, "observed_at", "category", "attributes", "reviewed")
     validate_references(
         db,
         finding.workspace_id,

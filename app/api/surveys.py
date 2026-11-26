@@ -31,6 +31,8 @@ from app.services.survey_import import (
 router = APIRouter(prefix="/surveys", tags=["survey review"])
 PIPELINE = "mgts.defects.v1"
 settings = get_settings()
+MAX_PACKAGE_BYTES = 512 * 1024**2
+MAX_SIDECAR_BYTES = 8 * 1024**2
 
 
 def survey(db, job_id):
@@ -107,9 +109,9 @@ def import_survey(
                 raise ValueError(f"Повтор или недопустимый путь: {key}")
             seen.add(key)
             if suffix in {".txt", ".yaml", ".yml", ".json"}:
-                data = upload.file.read(8 * 1024**2 + 1)
+                data = upload.file.read(MAX_SIDECAR_BYTES + 1)
                 total += len(data)
-                if len(data) > 8 * 1024**2 or total > 512 * 1024**2:
+                if len(data) > MAX_SIDECAR_BYTES or total > MAX_PACKAGE_BYTES:
                     raise HTTPException(413, "Слишком большой пакет")
                 sidecars[key] = data
                 continue
@@ -131,11 +133,15 @@ def import_survey(
                 uuid4().hex + (".bin" if kind == "gps" else suffix)
             )
             written.append(dest)
+            file_size = 0
             with dest.open("xb") as out:
                 while chunk := upload.file.read(1024**2):
+                    file_size += len(chunk)
                     total += len(chunk)
-                    if total > 512 * 1024**2:
-                        raise HTTPException(413, "Пакет превышает 512 МБ")
+                    if kind == "gps" and file_size > MAX_SIDECAR_BYTES:
+                        raise HTTPException(413, "GPX превышает 8 МиБ")
+                    if total > MAX_PACKAGE_BYTES:
+                        raise HTTPException(413, "Пакет превышает 512 МиБ")
                     out.write(chunk)
             media = Media(
                 id=uuid4(),

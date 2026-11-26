@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
 from app.api.deps import DbSession
-from app.api.utils import apply_patch, commit, get_or_404
+from app.api.utils import apply_patch, commit, get_or_404, reject_null_fields
 from app.core.config import get_settings
 from app.models.job import ProcessingJob
 from app.models.media import Media
@@ -56,6 +56,7 @@ def get_job(job_id: UUID, db: DbSession) -> ProcessingJob:
 def update_job(job_id: UUID, payload: JobUpdate, db: DbSession) -> ProcessingJob:
     job = get_or_404(db, ProcessingJob, job_id)
     changes = payload.model_dump(exclude_unset=True)
+    reject_null_fields(changes, "pipeline", "status", "parameters", "result")
     if "media_id" in changes:
         ensure_in_workspace(
             db, Media, changes["media_id"], job.workspace_id, "media_id"

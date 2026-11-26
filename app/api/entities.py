@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import select
 
 from app.api.deps import DbSession
-from app.api.utils import apply_patch, commit, get_or_404
+from app.api.utils import apply_patch, commit, get_or_404, reject_null_fields
 from app.models.entity import Entity
 from app.models.entity_type import EntityType
 from app.schemas.entity import EntityCreate, EntityRead, EntityUpdate
@@ -65,6 +65,7 @@ def get_entity(entity_id: UUID, db: DbSession) -> Entity:
 def update_entity(entity_id: UUID, payload: EntityUpdate, db: DbSession) -> Entity:
     entity = get_or_404(db, Entity, entity_id)
     changes = payload.model_dump(exclude_unset=True)
+    reject_null_fields(changes, "attributes")
     entity_type = entity.entity_type
     if "entity_type_id" in changes:
         entity_type = ensure_in_workspace(

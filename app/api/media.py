@@ -15,7 +15,7 @@ from fastapi import (
 from sqlalchemy import select
 
 from app.api.deps import DbSession
-from app.api.utils import apply_patch, commit, get_or_404
+from app.api.utils import apply_patch, commit, get_or_404, reject_null_fields
 from app.core.config import get_settings
 from app.models.media import Media
 from app.schemas.media import MediaCreate, MediaRead, MediaUpdate
@@ -115,9 +115,7 @@ def get_media(media_id: UUID, db: DbSession) -> Media:
 def update_media(media_id: UUID, payload: MediaUpdate, db: DbSession) -> Media:
     media = get_or_404(db, Media, media_id)
     changes = payload.model_dump(exclude_unset=True)
-    for field in ("kind", "url", "attributes"):
-        if field in changes and changes[field] is None:
-            raise HTTPException(status_code=422, detail=f"{field} cannot be null")
+    reject_null_fields(changes, "kind", "url", "attributes")
     validate_coordinates(
         changes.get("latitude", media.latitude),
         changes.get("longitude", media.longitude),

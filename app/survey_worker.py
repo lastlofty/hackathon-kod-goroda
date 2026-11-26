@@ -3,14 +3,18 @@
 import argparse
 import logging
 import mimetypes
+import os
+import re
 import time
 from importlib import import_module
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from uuid import UUID
 
 import httpx2 as httpx
 
 logger = logging.getLogger(__name__)
+UPLOAD_PATH = re.compile(r"/uploads/[0-9a-f]{32}\.(?:jpg|jpeg|png|webp|mp4|mov|webm|bin)")
 
 
 def run_next(client, infer):
@@ -60,9 +64,12 @@ def process(client, base, infer):
         with TemporaryDirectory(prefix="mgts-survey-") as temp:
             inputs = []
             for item in survey["inputs"]:
-                path = Path(temp) / (item["id"] + Path(item["name"]).suffix)
+                url = item["url"]
+                if not UPLOAD_PATH.fullmatch(url):
+                    raise ValueError("Survey input must reference a local upload")
+                path = Path(temp) / (UUID(item["id"]).hex + Path(url).suffix)
                 with (
-                    client.stream("GET", item["url"]) as response,
+                    client.stream("GET", url) as response,
                     path.open("wb") as out,
                 ):
                     response.raise_for_status()
@@ -93,7 +100,9 @@ def main():
     args = parser.parse_args()
     module, function = args.adapter.split(":")
     infer = getattr(import_module(module), function)
-    with httpx.Client(base_url=args.api, timeout=300) as client:
+    password = os.getenv("ACCESS_PASSWORD")
+    auth = ("operator", password) if password else None
+    with httpx.Client(base_url=args.api, timeout=300, auth=auth, follow_redirects=False) as client:
         while True:
             processed = run_next(client, infer)
             if args.once:
