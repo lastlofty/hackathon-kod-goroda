@@ -75,6 +75,7 @@ def survey_result(db, survey, jobs):
                     "best_det_id": det_id,
                     "status": attributes.get("priority") or "review",
                     "verdict": attributes.get("verdict"),
+                    "recommendation": finding.recommendation,
                     "defect": defect,
                     "defect_score": defect_score,
                 }

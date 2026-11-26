@@ -161,6 +161,10 @@ const captureSurvey = (() => {
         issue: o.defect ? label(o.defect) : undefined,
         defect: o.defect,
         verdict: verdict(o),
+        hasDefect: o.verdict === "defect" ||
+          (o.verdict == null && Boolean(o.defect) &&
+            !["none", "normal", "ok"].includes(o.defect)),
+        recommendation: o.recommendation || best?.box.inference?.recommendation,
         confidence: Number.isFinite(o.defect_score)
           ? Math.round(o.defect_score * 100)
           : null,
@@ -470,6 +474,7 @@ const captureSurvey = (() => {
       (obj
         ? field("Вердикт модели", obj.verdict) +
           field("Тип дефекта модели", obj.issue) +
+          (obj.recommendation ? field("Рекомендация по объекту", obj.recommendation) : "") +
           field(
             "Уверенность в дефекте",
             obj.confidence == null ? "—" : obj.confidence + "%",
@@ -575,7 +580,7 @@ const captureSurvey = (() => {
       ? records.objects.filter(
           (o) =>
             reviewed(o) !== "rejected" &&
-            (o.priority === "urgent" ||
+            (o.hasDefect || o.priority === "urgent" ||
               o.priority === "review" ||
               reviewed(o) === "confirmed"),
         )
@@ -614,7 +619,9 @@ const captureSurvey = (() => {
             ) +
             "</p><p>" +
             escapeHTML(o.place || formatPoint(o.assetPoint || o.point)) +
-            "</p></div></article>"
+            "</p>" +
+            (o.recommendation ? "<p>Рекомендация: " + escapeHTML(o.recommendation) + "</p>" : "") +
+            "</div></article>"
           );
         })
         .join("");

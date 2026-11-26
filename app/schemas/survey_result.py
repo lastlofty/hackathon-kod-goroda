@@ -53,6 +53,7 @@ class Frame(Located):
 
 class SurveyObject(Located):
     verdict: Literal["ok", "defect", "unknown"] | None = None
+    recommendation: str | None = None
     object_id: Identifier
     category: Identifier = Field(alias="class")
     defect: str | None = None

@@ -156,10 +156,13 @@ def bind_frames(result, inputs, db, workspace_id):
     index = image_path_index(inputs)
     by_id = {i["id"]: i for i in inputs if i["kind"] == "image"}
     remaining = {i["id"]: i["name"] for i in by_id.values()}
+    bound_ids = set()
     payload = result.model_dump(mode="json", by_alias=True)
     for obj in payload["objects"]:
         if obj["verdict"] is None:
             del obj["verdict"]
+        if obj["recommendation"] is None:
+            del obj["recommendation"]
     for frame in payload["frames"]:
         for detection in frame["detections"]:
             if detection["inference"] is None:
@@ -167,6 +170,8 @@ def bind_frames(result, inputs, db, workspace_id):
         name = frame["frame_id"]
         item = index.get(name)
         if frame["media_id"]:
+            if item and frame["media_id"] != item["id"]:
+                raise ValueError(f"media_id не совпадает с исходным кадром {name}")
             media = db.get(Media, UUID(frame["media_id"]))
             if (
                 not media
@@ -180,6 +185,9 @@ def bind_frames(result, inputs, db, workspace_id):
             frame["media_id"], frame["url"] = item["id"], item["url"]
         else:
             raise ValueError(f"Загрузите изображение {name} или укажите его media_id")
+        if frame["media_id"] in bound_ids:
+            raise ValueError(f"Фото уже связано с другим кадром: {name}")
+        bound_ids.add(frame["media_id"])
         source = by_id.get(frame["media_id"], {})
         for field in ("lat", "lon", "captured_at"):
             if frame.get(field) is None and field in source:
