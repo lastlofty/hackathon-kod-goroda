@@ -166,7 +166,7 @@ def imported_result(inputs, sidecars, digests):
     return SurveyResult.model_validate({"frames": frames, "objects": objects})
 
 
-def bind_frames(result, inputs, db, workspace_id):
+def bind_frames(result, inputs, db, workspace_id, *, optional_media=()):
     index = image_path_index(inputs)
     by_id = {i["id"]: i for i in inputs if i["kind"] == "image"}
     remaining = {i["id"]: i["name"] for i in by_id.values()}
@@ -209,6 +209,8 @@ def bind_frames(result, inputs, db, workspace_id):
         if frame.get("captured_at") is None and "captured_at" in source:
             frame["captured_at"] = source["captured_at"]
         remaining.pop(frame["media_id"], None)
+    for media_id in optional_media:
+        remaining.pop(media_id, None)
     if remaining:
         raise ValueError(
             "Нет результата для исходного кадра " + next(iter(remaining.values()))

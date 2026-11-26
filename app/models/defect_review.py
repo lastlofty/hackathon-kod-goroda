@@ -26,3 +26,12 @@ class SurveyObjectLocation(Base):
     object_id: Mapped[str] = mapped_column(String(512), primary_key=True)
     lat: Mapped[float] = mapped_column(Float)
     lon: Mapped[float] = mapped_column(Float)
+
+
+class RemovedSurveyFrame(Base):
+    __tablename__ = "removed_survey_frames"
+
+    job_id: Mapped[UUID] = mapped_column(
+        ForeignKey("processing_jobs.id", ondelete="CASCADE"), primary_key=True
+    )
+    media_id: Mapped[UUID] = mapped_column(primary_key=True)

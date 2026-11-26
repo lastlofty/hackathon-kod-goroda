@@ -449,6 +449,42 @@ const captureSurvey = (() => {
       form.querySelector("button").disabled = false;
     }
   }
+  function deleteFrameButton(frame) {
+    if (!frame?.mediaId || !job || job.id === "demo") return "";
+    return '<button type="button" class="table-link remove-frame" data-remove-frame="' +
+      escapeHTML(frame.mediaId) + '">Удалить кадр</button>';
+  }
+
+  async function deleteFrame(button) {
+    const frame = records.frames.find(f => f.mediaId === button.dataset.removeFrame);
+    if (!frame || !window.confirm('Удалить «' + frame.name + '» из обследования?')) return;
+    const id = job.id;
+    const seq = revision;
+    const index = records.frames.indexOf(frame);
+    const neighbor = records.frames[index + 1] || records.frames[index - 1];
+    button.disabled = true;
+    try {
+      const data = await api('/surveys/' + encodeURIComponent(id) + '/frames/' +
+        encodeURIComponent(frame.mediaId), {method: "DELETE"});
+      if (seq !== revision) return;
+      clearTimeout(timer);
+      const nextRevision = ++revision;
+      if (selectedFrame === frame.id) {
+        state.selected = null;
+        pointGroup = null;
+        selectedFrame = neighbor?.id;
+        heldFrame = Boolean(neighbor);
+      }
+      applyData(data, convert(data));
+      if (data.status === "queued" || data.status === "running")
+        timer = setTimeout(() => poll(id, nextRevision), 2200);
+      announce("Кадр удалён из обследования.");
+    } catch (error) {
+      if (seq === revision) announce(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  }
   function renderCard() {
     const reel = el("panorama-frames");
     reel.querySelector('[aria-pressed="true"]')?.setAttribute("aria-pressed", "false");
@@ -485,7 +521,7 @@ const captureSurvey = (() => {
     }
     const index = obj ? objects.indexOf(obj) : frames.indexOf(frame);
     const count = obj ? objects.length : frames.length;
-    el("position").textContent = index + 1 + " / " + count;
+    el("position").textContent = (count ? index + 1 : 0) + " / " + count;
     document
       .querySelectorAll('[data-action="prev"],[data-action="next"]')
       .forEach((b) => (b.disabled = count < 2));
@@ -502,6 +538,8 @@ const captureSurvey = (() => {
         '<p class="empty">' +
         (state.filter !== "all"
           ? "Нет объектов по выбранному статусу."
+          : job?.status === "completed" && !records.frames.length
+            ? "В обследовании нет кадров."
           : job && job.status !== "completed"
             ? "Кадры появятся после обработки съёмки."
             : "Выберите съёмку или загрузите файлы.") +
@@ -558,7 +596,7 @@ const captureSurvey = (() => {
         '">Исходник</button><button data-action="overlay" aria-pressed="' +
         state.overlay +
         '">' + (job?.result?.source === "dataset" ? "Данные таблицы" : "Результат модели") + "</button></div>" +
-        frameChoice +
+        frameChoice + deleteFrameButton(frame) +
         "</div></div>"
       : "";
     let review = "";
@@ -706,7 +744,7 @@ const captureSurvey = (() => {
             formatPoint(f.cameraPoint) +
             '</td><td><button class="table-link" data-capture="' +
             escapeHTML(f.id) +
-            '">Открыть кадр ↗</button></td></tr>',
+            '">Открыть кадр ↗</button> ' + deleteFrameButton(f) + "</td></tr>",
         )
         .join("") +
       "</tbody></table></div>";
@@ -1114,6 +1152,7 @@ const captureSurvey = (() => {
     document.addEventListener("click", (e) => {
       const control = e.target.closest("button");
       if (!control) return;
+      if (control.dataset.removeFrame) { deleteFrame(control); return; }
       if (control.dataset.capture) {
         if (
           state.filter !== "all" &&

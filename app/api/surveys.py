@@ -14,7 +14,11 @@ from sqlalchemy.orm import defer
 from app.api.deps import DbSession
 from app.core.config import get_settings
 from app.models import Media, ProcessingJob, Workspace
-from app.models.defect_review import DefectReview, SurveyObjectLocation
+from app.models.defect_review import (
+    DefectReview,
+    RemovedSurveyFrame,
+    SurveyObjectLocation,
+)
 from app.schemas.survey_result import (
     DefectDecision,
     ObjectLocation,
@@ -28,6 +32,7 @@ from app.services.photo_metadata import (
     photo_metadata,
 )
 from app.services.survey_archive import upload_entries
+from app.services.survey_frames import remaining_result, removed_media_ids
 from app.services.survey_import import (
     IMAGE_SUFFIX,
     VIDEO_SUFFIX,
@@ -261,12 +266,17 @@ def canonical_result(result):
 @router.get("/{job_id}")
 def get_survey(job_id: UUID, db: DbSession):
     job = survey(db, job_id)
+    removed = removed_media_ids(db, job_id)
+    result = remaining_result(job.result, removed)
+    object_ids = {o["object_id"] for o in result.get("objects", [])}
     reviews = db.scalars(select(DefectReview).where(DefectReview.job_id == job_id))
     return {
         **summary(job),
         "workspace_id": job.workspace_id,
-        "inputs": job.parameters.get("inputs", []),
-        "result": canonical_result(job.result),
+        "inputs": [
+            i for i in job.parameters.get("inputs", []) if i["id"] not in removed
+        ],
+        "result": canonical_result(result),
         "manual_locations": {
             row.object_id: {"lat": row.lat, "lon": row.lon, "source": "manual"}
             for row in db.scalars(
@@ -274,11 +284,46 @@ def get_survey(job_id: UUID, db: DbSession):
                     SurveyObjectLocation.job_id == job_id
                 )
             )
+            if row.object_id in object_ids
         },
         "reviews": {
-            r.object_id: {"decision": r.decision, "defects": r.defects} for r in reviews
+            r.object_id: {"decision": r.decision, "defects": r.defects}
+            for r in reviews
+            if r.object_id in object_ids
         },
     }
+
+
+@router.delete("/{job_id}/frames/{media_id}")
+def remove_survey_frame(job_id: UUID, media_id: UUID, db: DbSession):
+    # Serialize removals for this survey on SQLite and PostgreSQL alike.
+    locked = db.execute(
+        update(ProcessingJob)
+        .where(ProcessingJob.id == job_id, ProcessingJob.pipeline == PIPELINE)
+        .values(status=ProcessingJob.status)
+    )
+    if not locked.rowcount:
+        raise HTTPException(404, "Обследование не найдено")
+    job = survey(db, job_id)
+    key = str(media_id)
+    removed = removed_media_ids(db, job_id)
+    inputs = job.parameters.get("inputs", [])
+    if key not in removed:
+        if not (
+            any(i["kind"] == "image" and i["id"] == key for i in inputs)
+            or any(f["media_id"] == key for f in job.result.get("frames", []))
+        ):
+            raise HTTPException(404, "Кадр отсутствует в обследовании")
+        db.add(RemovedSurveyFrame(job_id=job_id, media_id=media_id))
+        removed.add(key)
+        if job.status in ("queued", "running") and not any(
+            i["kind"] in ("image", "video") and i["id"] not in removed for i in inputs
+        ):
+            job.status = "completed"
+            job.result = {"frames": [], "objects": []}
+            job.finished_at = datetime.now(UTC)
+    db.commit()
+    return get_survey(job_id, db)
 
 
 @router.post("/{job_id}/claim")
@@ -330,7 +375,13 @@ def report_progress(job_id: UUID, payload: SurveyProgress, db: DbSession):
 def submit_result(job_id: UUID, payload: SurveyResult, db: DbSession):
     job = external_survey(db, job_id)
     try:
-        result = bind_frames(payload, job.parameters["inputs"], db, job.workspace_id)
+        result = bind_frames(
+            payload,
+            job.parameters["inputs"],
+            db,
+            job.workspace_id,
+            optional_media=removed_media_ids(db, job_id),
+        )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     changed = db.execute(
@@ -357,7 +408,10 @@ def submit_result(job_id: UUID, payload: SurveyResult, db: DbSession):
 def review_defect(job_id: UUID, payload: DefectDecision, db: DbSession):
     job = survey(db, job_id)
     if not any(
-        o["object_id"] == payload.object_id for o in job.result.get("objects", [])
+        o["object_id"] == payload.object_id
+        for o in remaining_result(job.result, removed_media_ids(db, job_id)).get(
+            "objects", []
+        )
     ):
         raise HTTPException(404, "Объект отсутствует в обследовании")
     db.merge(DefectReview(job_id=job.id, **payload.model_dump()))
@@ -373,7 +427,10 @@ def review_defect(job_id: UUID, payload: DefectDecision, db: DbSession):
 def locate_object(job_id: UUID, payload: ObjectLocation, db: DbSession):
     job = survey(db, job_id)
     if not any(
-        obj["object_id"] == payload.object_id for obj in job.result.get("objects", [])
+        obj["object_id"] == payload.object_id
+        for obj in remaining_result(job.result, removed_media_ids(db, job_id)).get(
+            "objects", []
+        )
     ):
         raise HTTPException(404, "Объект отсутствует в обследовании")
     db.merge(SurveyObjectLocation(job_id=job_id, **payload.model_dump()))

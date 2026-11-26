@@ -425,3 +425,6 @@ button.path-shape .path-ink,.editor-image[data-mode="edit"] .path-ink { pointer-
 #cabinet-defects label, .cabinet-location label { display:inline-flex; align-items:center; gap:4px }
 .cabinet-location form { display:flex; flex-wrap:wrap; align-items:end; gap:6px; margin:6px 0 }
 .cabinet-location input { width:9em; max-width:100% }
+
+.frame-tools { flex-wrap:wrap }
+.frame-tools .remove-frame { margin-inline-start:auto }
