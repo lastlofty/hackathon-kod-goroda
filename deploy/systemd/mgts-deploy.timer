@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for validated MGTS releases
+
+[Timer]
+OnStartupSec=30s
+OnUnitInactiveSec=60s
+Unit=mgts-deploy.service
+
+[Install]
+WantedBy=timers.target
