@@ -6,6 +6,8 @@ from pathlib import PurePosixPath
 from xml.etree import ElementTree as ET
 from zipfile import BadZipFile, ZipFile
 
+from pydantic import BaseModel, TypeAdapter
+
 from app.schemas.survey_result import SurveyResult
 
 NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
@@ -77,7 +79,7 @@ def cabinet_result(inputs, sheets):
         path = PurePosixPath(name)
         key = path.parent, path.stem
         index[key] = name if key not in index else None
-    objects = []
+    labels = {}
     for name, data in sheets.items():
         folder = PurePosixPath(name).parent
         rows = worksheet_rows(data)
@@ -91,36 +93,91 @@ def cabinet_result(inputs, sheets):
         category = classes.pop()
         for filename, status, description in rows:
             path = index.get((folder, PurePosixPath(filename).stem))
-            if not path or frames[path]["detections"]:
+            if not path or path in labels:
                 raise ValueError(
                     f"Неоднозначная или отсутствующая фотография {folder}/{filename}"
                 )
-            defects, verdict = classify(status, description)
-            # The inventory identifies a cabinet on a photo, without cross-photo identities or boxes.
-            det_id = path + "#1"
-            frames[path]["detections"].append(
-                {
-                    "det_id": det_id,
-                    "object_id": path,
-                    "class": category,
-                    "bbox": None,
-                    "defects": defects,
-                }
+            labels[path] = (path, category, status, description)
+    return labeled_frames(frames, labels)
+
+
+class PreparedRow(BaseModel):
+    image_id: str
+    image_path: str
+    sha256: str
+    object_type: str | None
+    status_raw: str | None
+    description_raw: str | None
+
+
+def prepared_result(inputs, manifest, contents, digests):
+    rows = TypeAdapter(list[PreparedRow]).validate_python(contents)
+    root = PurePosixPath(manifest).parent
+    frames = {}
+    labels = {}
+    classes = {"tksh": "ТКШ", "rsh": "РЩ"}
+    for row in rows:
+        image = PurePosixPath(row.image_path)
+        path = str(root / image)
+        if image.parent != PurePosixPath("images") or image.stem != row.image_id:
+            raise ValueError("Путь снимка не соответствует ID в manifest.json")
+        if path in frames or digests.get(path) != row.sha256:
+            raise ValueError(
+                f"Повтор, отсутствие или несовпадение SHA-256 снимка {path}"
             )
-            objects.append(
-                {
-                    "object_id": path,
-                    "class": category,
-                    "lat": None,
-                    "lon": None,
-                    "description": description,
-                    "defects": defects,
-                    "verdict": verdict,
-                    "status": "normal" if verdict == "ok" else "review",
-                    "observations": [det_id],
-                    "best_det_id": det_id,
-                }
-            )
+        frames[path] = {"frame_id": path, "detections": []}
+        if (
+            row.object_type is None
+            and row.status_raw is None
+            and row.description_raw is None
+        ):
+            continue
+        if (
+            row.object_type not in classes
+            or not row.status_raw
+            or not row.description_raw
+        ):
+            raise ValueError(f"Неполная метка датасета для {path}")
+        labels[path] = (
+            row.image_id,
+            classes[row.object_type],
+            row.status_raw,
+            row.description_raw,
+        )
+    if set(frames) != {i["name"] for i in inputs if i["kind"] == "image"}:
+        raise ValueError("Список фотографий не совпадает с manifest.json")
+    return labeled_frames(frames, labels)
+
+
+def labeled_frames(frames, labels):
+    objects = []
+    for path, (object_id, category, status, description) in labels.items():
+        defects, verdict = classify(status, description)
+        # The inventory identifies a cabinet on a photo, without cross-photo identities or boxes.
+        det_id = object_id + "#1"
+        frames[path]["detections"].append(
+            {
+                "det_id": det_id,
+                "object_id": object_id,
+                "class": category,
+                "bbox": None,
+                "defects": defects,
+            }
+        )
+        objects.append(
+            {
+                "object_id": object_id,
+                "class": category,
+                "lat": None,
+                "lon": None,
+                "description": description,
+                "defects": defects,
+                "verdict": verdict,
+                "status": "normal" if verdict == "ok" else "review",
+                "observations": [det_id],
+                "best_det_id": det_id,
+            }
+        )
     return SurveyResult.model_validate(
         {"source": "dataset", "frames": list(frames.values()), "objects": objects}
     )

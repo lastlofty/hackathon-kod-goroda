@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from pathlib import PurePosixPath
 from uuid import UUID
@@ -7,7 +8,7 @@ import yaml
 
 from app.models import Media
 from app.schemas.survey_result import SurveyResult
-from app.services.cabinet_dataset import cabinet_result
+from app.services.cabinet_dataset import cabinet_result, prepared_result
 from app.services.photo_metadata import image_path_index
 
 IMAGE_SUFFIX = {".jpg", ".jpeg", ".webp", ".png"}
@@ -76,8 +77,15 @@ def yolo_key(path, folder):
     return tuple(parts)
 
 
-def imported_result(inputs, sidecars):
+def imported_result(inputs, sidecars, digests):
     manifests = [p for p in sidecars if p.lower().endswith(".json")]
+    for name in manifests:
+        if PurePosixPath(name).name == "manifest.json":
+            contents = json.loads(sidecars[name])
+            if isinstance(contents, list):
+                if len(manifests) != 1:
+                    raise ValueError("Выберите один датасет или один результат модели")
+                return prepared_result(inputs, name, contents, digests)
     if manifests:
         if len(manifests) != 1:
             raise ValueError("Для одной загрузки нужен один JSON результата")

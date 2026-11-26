@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
@@ -101,6 +102,7 @@ def import_survey(
         except IntegrityError:
             workspace = db.scalar(select(Workspace).where(Workspace.slug == "mgts"))
     inputs, sidecars, written, seen = [], {}, [], set()
+    digests = {}
     fixes = []
     media_by_id = {}
     total = 0
@@ -141,6 +143,7 @@ def import_survey(
                 uuid4().hex + (".bin" if kind == "gps" else suffix)
             )
             written.append(dest)
+            checksum = sha256() if kind == "image" else None
             file_size = 0
             with dest.open("xb") as out:
                 while chunk := stream.read(1024**2):
@@ -150,7 +153,11 @@ def import_survey(
                         raise HTTPException(413, "GPX превышает 8 МиБ")
                     if total > MAX_PACKAGE_BYTES:
                         raise HTTPException(413, "Пакет превышает 512 МиБ")
+                    if checksum is not None:
+                        checksum.update(chunk)
                     out.write(chunk)
+            if checksum is not None:
+                digests[key] = checksum.hexdigest()
             media = Media(
                 id=uuid4(),
                 workspace_id=workspace.id,
@@ -171,7 +178,7 @@ def import_survey(
             raise ValueError("Выберите фотографии или видео")
         apply_coordinate_file(inputs, sidecars)
         locate_from_track(inputs, fixes)
-        result = imported_result(inputs, sidecars)
+        result = imported_result(inputs, sidecars, digests)
         for item in inputs:
             if item["kind"] != "image":
                 continue

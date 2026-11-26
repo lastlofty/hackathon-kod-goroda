@@ -24,7 +24,7 @@
 <script defer src="./finding-queue.js?v=04308928bbc3"></script>
 <script defer src="./overview-retakes.js?v=683f619aea6a"></script>
 <script defer src="./overview.js?v=c7b7593660ec"></script>
-<script defer src="./operator.js?v=ead2924cdd05"></script>
+<script defer src="./operator.js?v=a0d66fd45a27"></script>
 <script defer src="./app.js?v=8ad2392bfae9"></script>
 </head>
 <body>
@@ -86,7 +86,7 @@
         <div id="class-filters" role="group" aria-label="Классы объектов"></div>
         <div id="route-frames" class="route-frames" aria-label="Кадры маршрута, переключение стрелками влево и вправо"></div>
         <section id="panorama-deck" aria-labelledby="panorama-title" hidden>
-          <div class="deck-head"><h2 id="panorama-title">Панорамы Москвы</h2><span id="panorama-count" class="mono"></span></div>
+          <div class="deck-head"><h2 id="panorama-title">Панорамы Москвы</h2><span id="panorama-count" class="mono"></span><a class="button" href="./examples/moscow-panorama-defects-5.zip" download>Скачать 5 фото с дефектами</a></div>
           <div id="panorama-frames" class="route-frames" role="group" aria-label="Снимки из Яндекс Карт"></div>
         </section>
       </section>
@@ -220,7 +220,7 @@
       <div class="dialog-head"><h2>Загрузить съёмку</h2></div><div class="file-field">
       <p class="muted">
         Выберите фото, видео или папку YOLO Detection. Можно добавить GPX-трек и
-        JSON с результатом модели. Архивы ДСС с фотографиями и таблицами XLSX можно выбрать вместе.
+        JSON с результатом модели. Можно загрузить архивы ДСС вместе или выбрать папку датасета с manifest.json и images/.
       </p>
       <input
         type="file"
