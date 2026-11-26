@@ -88,6 +88,7 @@ class Frame(Located):
 class SurveyObject(Located, DefectList):
     description: str | None = Field(None, max_length=2048)
     verdict: Literal["ok", "defect", "unknown"] | None = None
+    recommendation: str | None = None
     object_id: Identifier
     category: Identifier = Field(alias="class")
     defect_score: Score | None = None
