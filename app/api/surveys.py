@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
+from zipfile import BadZipFile
 
 import yaml
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -12,13 +13,20 @@ from sqlalchemy.orm import defer
 from app.api.deps import DbSession
 from app.core.config import get_settings
 from app.models import Media, ProcessingJob, Workspace
-from app.models.defect_review import DefectReview
-from app.schemas.survey_result import DefectDecision, SurveyProgress, SurveyResult
+from app.models.defect_review import DefectReview, SurveyObjectLocation
+from app.schemas.survey_result import (
+    DefectDecision,
+    ObjectLocation,
+    SurveyProgress,
+    SurveyResult,
+    with_defects,
+)
 from app.services.photo_metadata import (
     apply_coordinate_file,
     locate_from_track,
     photo_metadata,
 )
+from app.services.survey_archive import upload_entries
 from app.services.survey_import import (
     IMAGE_SUFFIX,
     VIDEO_SUFFIX,
@@ -95,8 +103,8 @@ def import_survey(
     media_by_id = {}
     total = 0
     try:
-        for upload in files:
-            path = PurePosixPath((upload.filename or "").replace("\\", "/"))
+        for filename, stream in upload_entries(files):
+            path = PurePosixPath(filename.replace("\\", "/"))
             key, suffix = str(path), path.suffix.lower()
             if (
                 key in seen
@@ -106,8 +114,8 @@ def import_survey(
             ):
                 raise ValueError(f"Повтор или недопустимый путь: {key}")
             seen.add(key)
-            if suffix in {".txt", ".yaml", ".yml", ".json"}:
-                data = upload.file.read(8 * 1024**2 + 1)
+            if suffix in {".txt", ".yaml", ".yml", ".json", ".xlsx"}:
+                data = stream.read(8 * 1024**2 + 1)
                 total += len(data)
                 if len(data) > 8 * 1024**2 or total > 512 * 1024**2:
                     raise HTTPException(413, "Слишком большой пакет")
@@ -115,10 +123,10 @@ def import_survey(
                 continue
             if suffix not in IMAGE_SUFFIX | VIDEO_SUFFIX | {".gpx"}:
                 continue
-            head = upload.file.read(16)
-            upload.file.seek(0)
+            head = stream.read(16)
+            stream.seek(0)
             if suffix != ".gpx":
-                image_or_video_suffix(key, head)
+                suffix = image_or_video_suffix(key, head)
             kind = (
                 "image"
                 if suffix in IMAGE_SUFFIX
@@ -132,7 +140,7 @@ def import_survey(
             )
             written.append(dest)
             with dest.open("xb") as out:
-                while chunk := upload.file.read(1024**2):
+                while chunk := stream.read(1024**2):
                     total += len(chunk)
                     if total > 512 * 1024**2:
                         raise HTTPException(413, "Пакет превышает 512 МБ")
@@ -157,6 +165,7 @@ def import_survey(
             raise ValueError("Выберите фотографии или видео")
         apply_coordinate_file(inputs, sidecars)
         locate_from_track(inputs, fixes)
+        result = imported_result(inputs, sidecars)
         for item in inputs:
             if item["kind"] != "image":
                 continue
@@ -166,7 +175,6 @@ def import_survey(
                 media.captured_at = datetime.fromisoformat(item["captured_at"])
             if "location_source" in item:
                 media.attributes = {"location_source": item["location_source"]}
-        result = imported_result(inputs, sidecars)
         if inference_mode and (
             result is not None or any(i["kind"] == "video" for i in inputs)
         ):
@@ -207,7 +215,7 @@ def import_survey(
         db.rollback()
         for path in written:
             path.unlink(missing_ok=True)
-        if isinstance(exc, (ValueError, yaml.YAMLError)):
+        if isinstance(exc, (ValueError, BadZipFile, yaml.YAMLError)):
             raise HTTPException(422, str(exc)[:800]) from exc
         raise
     return summary(job)
@@ -223,6 +231,20 @@ def map_config():
     return {"browser_key": settings.dgis_browser_key}
 
 
+def canonical_result(result):
+    if not result:
+        return result
+    # Stored v1 results include bound URLs and media IDs that must survive normalization.
+    return {
+        **result,
+        "frames": [
+            {**f, "detections": [with_defects(d) for d in f["detections"]]}
+            for f in result["frames"]
+        ],
+        "objects": [with_defects(o) for o in result["objects"]],
+    }
+
+
 @router.get("/{job_id}")
 def get_survey(job_id: UUID, db: DbSession):
     job = survey(db, job_id)
@@ -231,9 +253,17 @@ def get_survey(job_id: UUID, db: DbSession):
         **summary(job),
         "workspace_id": job.workspace_id,
         "inputs": job.parameters.get("inputs", []),
-        "result": job.result,
+        "result": canonical_result(job.result),
+        "manual_locations": {
+            row.object_id: {"lat": row.lat, "lon": row.lon, "source": "manual"}
+            for row in db.scalars(
+                select(SurveyObjectLocation).where(
+                    SurveyObjectLocation.job_id == job_id
+                )
+            )
+        },
         "reviews": {
-            r.object_id: {"decision": r.decision, "defect": r.defect} for r in reviews
+            r.object_id: {"decision": r.decision, "defects": r.defects} for r in reviews
         },
     }
 
@@ -302,7 +332,9 @@ def submit_result(job_id: UUID, payload: SurveyResult, db: DbSession):
     )
     if not changed.rowcount:
         db.refresh(job)
-        if job.result != result:
+        if SurveyResult.model_validate(job.result) != SurveyResult.model_validate(
+            result
+        ):
             raise HTTPException(409, "Результат уже принят")
     db.commit()
     return summary(job)
@@ -322,3 +354,19 @@ def review_defect(job_id: UUID, payload: DefectDecision, db: DbSession):
         db.rollback()
         raise HTTPException(409, "Решение изменилось. Обновите карточку.") from exc
     return payload
+
+
+@router.patch("/{job_id}/object-location")
+def locate_object(job_id: UUID, payload: ObjectLocation, db: DbSession):
+    job = survey(db, job_id)
+    if not any(
+        obj["object_id"] == payload.object_id for obj in job.result.get("objects", [])
+    ):
+        raise HTTPException(404, "Объект отсутствует в обследовании")
+    db.merge(SurveyObjectLocation(job_id=job_id, **payload.model_dump()))
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "Точка изменилась. Обновите карточку.") from exc
+    return {**payload.model_dump(), "source": "manual"}

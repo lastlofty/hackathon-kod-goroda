@@ -47,7 +47,7 @@ function persist(message) {
 }
 
 function boxHTML(box, selected = false, editable = false, frameId) {
-  if (!box) return '';
+  if (!box || (!isPathType(box.type) && !Number.isFinite(box.w))) return '';
   const frame = frameId && frameById(frameId);
   const verdict = frame && boxVerdict(frame,box.id);
   const classes = ['box', verdict?.decision === 'rejected' ? 'rejected-box' : '', box.source === 'manual' ? 'manual' : '', selected ? 'selected' : '', box.y < .08 ? 'top' : '', box.x > .67 ? 'right' : ''].join(' ');
@@ -205,7 +205,7 @@ function renderList() {
   const exportButton = '<button class="table-link" data-action="export-json">Скачать JSON</button>';
   if (state.view === 'registry') {
     const listed = queueOnly ? records.objects.filter(needsFollowup) : records.objects;
-    const rows = listed.map(record => `<tr><td class="mono">${escapeHTML(displayId(record))}</td><td><span class="file-cell">${queueOnly && frameById(record.frame) ? `<img src="${escapeHTML(frameById(record.frame).src)}" alt="">` : ''}${escapeHTML(recordLabel(record))}</span></td><td>${escapeHTML([record.verdict, record.issue].filter(Boolean).join(' · ') || '—')}</td><td>${status(record)}</td><td>${escapeHTML([reviewNames[record.inspectionReview?.decision], record.inspectionReview?.defect || record.inspectionReview?.note].filter(Boolean).join(' · ') || '—')}</td><td>${escapeHTML(record.place || formatPoint(record.point))}</td><td><button class="table-link" data-record="${escapeHTML(record.id)}">${isValidPoint(record.point) ? 'На карте ↗' : 'Карточка ↗'}</button></td></tr>`).join('');
+    const rows = listed.map(record => `<tr><td class="mono">${escapeHTML(displayId(record))}</td><td><span class="file-cell">${queueOnly && frameById(record.frame) ? `<img src="${escapeHTML(frameById(record.frame).src)}" alt="">` : ''}${escapeHTML(recordLabel(record))}</span></td><td>${escapeHTML([record.verdict, record.issue].filter(Boolean).join(' · ') || '—')}</td><td>${status(record)}</td><td>${escapeHTML([reviewNames[record.inspectionReview?.decision], record.inspectionReview?.defects?.join(', ') || record.inspectionReview?.defect || record.inspectionReview?.note].filter(Boolean).join(' · ') || '—')}</td><td>${escapeHTML(record.place || formatPoint(record.manualLocation ? record.assetPoint : record.point || record.assetPoint))}</td><td><button class="table-link" data-record="${escapeHTML(record.id)}">${isValidPoint(record.point || record.assetPoint) ? 'На карте ↗' : 'Карточка ↗'}</button></td></tr>`).join('');
     $('list-view').innerHTML = `<div class="queue-tools"><button class="button" data-action="queue" aria-pressed="${queueOnly}">Требуют проверки · ${records.objects.filter(needsFollowup).length}</button></div><div class="table-shell"><table><thead><tr><th>ID</th><th>Объект</th><th>Признак</th><th>Статус</th><th>Решение оператора</th><th>Место</th><th>Просмотр</th></tr></thead><tbody>${rows || '<tr><td colspan="7">Очередь пуста.</td></tr>'}</tbody></table></div>`;
     return;
   }
@@ -992,8 +992,8 @@ function download(content,type,name) {
 }
 
 function exportCSV() {
-  const rows = [['ID','Объект','Признак','Статус','Место','Широта съёмки','Долгота съёмки','Источник','Вердикт модели','Уверенность в дефекте, %','Решение оператора','Тип дефекта по проверке','Широта объекта','Долгота объекта']];
-  for (const r of records.objects) rows.push([displayId(r),recordLabel(r),r.issue ?? '',priorities[priorityOf(r)],r.place ?? '',r.point?.[1] ?? '',r.point?.[0] ?? '',r.source?.url ?? '',r.verdict ?? '',r.confidence ?? '',reviewNames[r.inspectionReview?.decision] ?? '',r.inspectionReview?.defect ?? '',r.assetPoint?.[1] ?? '',r.assetPoint?.[0] ?? '']);
+  const rows = [['ID','Объект','Признак','Статус','Место','Широта съёмки','Долгота съёмки','Источник','Вердикт','Уверенность в дефекте, %','Решение оператора','Тип дефекта по проверке','Широта объекта','Долгота объекта','Источник точки объекта']];
+  for (const r of records.objects) rows.push([displayId(r),recordLabel(r),r.issue ?? '',priorities[priorityOf(r)],r.place ?? '',r.point?.[1] ?? '',r.point?.[0] ?? '',r.datasetLabel ? 'Таблица ДСС' : r.source?.url ?? '',r.verdict ?? '',r.confidence ?? '',reviewNames[r.inspectionReview?.decision] ?? '',r.inspectionReview?.defects?.join(', ') ?? r.inspectionReview?.defect ?? '',r.assetPoint?.[1] ?? '',r.assetPoint?.[0] ?? '',r.manualLocation ? 'Введена вручную' : '']);
   const text = rows.map(row => row.map(value => '"' + String(value).replaceAll('"','""') + '"').join(';')).join('\r\n');
   download('\ufeff' + text,'text/csv;charset=utf-8','mgts-objects.csv');
 }

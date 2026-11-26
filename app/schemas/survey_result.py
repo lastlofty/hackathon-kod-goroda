@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 Identifier = Annotated[str, Field(min_length=1, max_length=512)]
 Score = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
@@ -27,19 +27,53 @@ class InferenceDetails(BaseModel):
     recommendation: str | None = None
 
 
-class Detection(BaseModel):
+DefectName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=256)
+]
+
+
+def with_defects(value):
+    if not isinstance(value, dict) or ("defect" not in value and "defects" in value):
+        return value
+    data = dict(value)
+    old = data.pop("defect", None)
+    legacy = [] if not old or old in ("none", "normal", "ok") else [old]
+    if (
+        legacy
+        and "defects" in data
+        and (not isinstance(data["defects"], list) or old not in data["defects"])
+    ):
+        raise ValueError("Поля defect и defects противоречат друг другу")
+    data.setdefault("defects", legacy)
+    return data
+
+
+class DefectList(BaseModel):
+    defects: list[DefectName] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_legacy(cls, value):
+        return with_defects(value)
+
+    @model_validator(mode="after")
+    def unique_types(self):
+        self.defects = list(dict.fromkeys(self.defects))
+        return self
+
+
+class Detection(DefectList):
     inference: InferenceDetails | None = None
     det_id: Identifier
     object_id: Identifier
     category: Identifier = Field(alias="class")
     score: Score | None = None
-    bbox: tuple[Score, Score, Score, Score]
-    defect: str | None = None
+    bbox: tuple[Score, Score, Score, Score] | None = None
     defect_score: Score | None = None
 
     @model_validator(mode="after")
     def nonempty_box(self):
-        if min(self.bbox[2:]) <= 0:
+        if self.bbox and min(self.bbox[2:]) <= 0:
             raise ValueError("Ширина и высота рамки должны быть положительными")
         return self
 
@@ -51,11 +85,11 @@ class Frame(Located):
     detections: list[Detection]
 
 
-class SurveyObject(Located):
+class SurveyObject(Located, DefectList):
+    description: str | None = Field(None, max_length=2048)
     verdict: Literal["ok", "defect", "unknown"] | None = None
     object_id: Identifier
     category: Identifier = Field(alias="class")
-    defect: str | None = None
     defect_score: Score | None = None
     status: Identifier
     observations: list[Identifier] = Field(min_length=1)
@@ -63,6 +97,7 @@ class SurveyObject(Located):
 
 
 class SurveyResult(BaseModel):
+    source: Literal["model", "dataset"] = "model"
     frames: list[Frame]
     objects: list[SurveyObject]
 
@@ -73,6 +108,8 @@ class SurveyResult(BaseModel):
         if len({o.object_id for o in self.objects}) != len(self.objects):
             raise ValueError("Повтор object_id")
         dets = [d for f in self.frames for d in f.detections]
+        if self.source != "dataset" and any(d.bbox is None for d in dets):
+            raise ValueError("Для детекции модели нужна рамка bbox")
         owners = {d.det_id: d.object_id for d in dets}
         if len(owners) != len(dets):
             raise ValueError("Повтор det_id")
@@ -93,19 +130,24 @@ class SurveyResult(BaseModel):
         return self
 
 
-class DefectDecision(BaseModel):
+class DefectDecision(DefectList):
     model_config = ConfigDict(extra="forbid")
     object_id: Identifier
     decision: Literal["confirmed", "rejected"]
-    defect: str | None = Field(None, max_length=256)
 
     @model_validator(mode="after")
     def check_type(self):
-        if self.decision == "confirmed" and not (self.defect or "").strip():
+        if self.decision == "confirmed" and not self.defects:
             raise ValueError("Укажите тип подтверждённого дефекта")
-        if self.decision == "rejected" and self.defect:
+        if self.decision == "rejected" and self.defects:
             raise ValueError("Отклонение не содержит типа дефекта")
         return self
+
+
+class ObjectLocation(Located):
+    object_id: Identifier
+    lat: float = Field(ge=-90, le=90, strict=True)
+    lon: float = Field(ge=-180, le=180, strict=True)
 
 
 class SurveyProgress(BaseModel):

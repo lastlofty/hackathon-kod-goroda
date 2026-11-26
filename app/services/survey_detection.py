@@ -9,7 +9,7 @@ from sqlalchemy import func, select, update
 
 from app.db.session import SessionLocal
 from app.models import Finding, ProcessingJob
-from app.schemas.survey_result import SurveyResult
+from app.schemas.survey_result import DefectList, SurveyResult
 from app.services.inference import run_job
 from app.services.survey_import import bind_frames
 
@@ -39,7 +39,7 @@ def survey_result(db, survey, jobs):
         object_id = str(attributes.get("object_id") or finding.entity_id or det_id)
         box = finding.geometry
         x, y, w, h = (box[key] for key in ("x", "y", "width", "height"))
-        defect = attributes.get("defect")
+        defects = DefectList.model_validate(attributes).defects
         defect_score = attributes.get("defect_score")
         frames[str(finding.media_id)]["detections"].append(
             {
@@ -55,14 +55,15 @@ def survey_result(db, survey, jobs):
                     "severity": finding.severity,
                     "recommendation": finding.recommendation,
                 },
-                "defect": defect,
+                "defects": defects,
                 "defect_score": defect_score,
             }
         )
         obj = objects.setdefault(
-            object_id, {"object_id": object_id, "observations": []}
+            object_id, {"object_id": object_id, "observations": [], "defects": []}
         )
         obj["observations"].append(det_id)
+        obj["defects"].extend(value for value in defects if value not in obj["defects"])
         rank = (
             defect_score if defect_score is not None else -1,
             finding.score if finding.score is not None else -1,
@@ -75,10 +76,14 @@ def survey_result(db, survey, jobs):
                     "best_det_id": det_id,
                     "status": attributes.get("priority") or "review",
                     "verdict": attributes.get("verdict"),
-                    "defect": defect,
                     "defect_score": defect_score,
                 }
             )
+    for obj in objects.values():
+        if obj["defects"]:
+            obj["verdict"] = "defect"
+            if obj["status"] == "normal":
+                obj["status"] = "review"
     result = SurveyResult.model_validate(
         {"frames": list(frames.values()), "objects": list(objects.values())}
     )

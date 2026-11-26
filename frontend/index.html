@@ -8,7 +8,7 @@
 <meta name="mgts-workspace" content="mgts">
 <meta name="mgts-backend-api" content="http://localhost:8080">
 <title>МГТС · Обследование сети</title>
-<link rel="stylesheet" href="./styles.css?v=2b993b41efd6">
+<link rel="stylesheet" href="./styles.css?v=5d798e7af48b">
 <script defer src="./dgis-map.js?v=e899419ddde8"></script>
 <script defer src="./drive.js?v=308d7e01209c"></script>
 <script defer src="./backend-api.js?v=4a45d03e5f93"></script>
@@ -24,8 +24,8 @@
 <script defer src="./finding-queue.js?v=04308928bbc3"></script>
 <script defer src="./overview-retakes.js?v=683f619aea6a"></script>
 <script defer src="./overview.js?v=c7b7593660ec"></script>
-<script defer src="./operator.js?v=a8f18c786828"></script>
-<script defer src="./app.js?v=e2330fe41150"></script>
+<script defer src="./operator.js?v=ead2924cdd05"></script>
+<script defer src="./app.js?v=8ad2392bfae9"></script>
 </head>
 <body>
 <header class="topbar">
@@ -85,6 +85,10 @@
         </div>
         <div id="class-filters" role="group" aria-label="Классы объектов"></div>
         <div id="route-frames" class="route-frames" aria-label="Кадры маршрута, переключение стрелками влево и вправо"></div>
+        <section id="panorama-deck" aria-labelledby="panorama-title" hidden>
+          <div class="deck-head"><h2 id="panorama-title">Панорамы Москвы</h2><span id="panorama-count" class="mono"></span></div>
+          <div id="panorama-frames" class="route-frames" role="group" aria-label="Снимки из Яндекс Карт"></div>
+        </section>
       </section>
     </div>
     <aside class="inspector" aria-label="Выбранный объект">
@@ -216,13 +220,13 @@
       <div class="dialog-head"><h2>Загрузить съёмку</h2></div><div class="file-field">
       <p class="muted">
         Выберите фото, видео или папку YOLO Detection. Можно добавить GPX-трек и
-        JSON с результатом модели.
+        JSON с результатом модели. Архивы ДСС с фотографиями и таблицами XLSX можно выбрать вместе.
       </p>
       <input
         type="file"
         id="files"
         multiple
-        accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.gpx,.json,.yaml,.yml,.txt"
+        accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm,.gpx,.json,.yaml,.yml,.txt,.xlsx,.zip"
         hidden
       /><input type="file" id="folder" webkitdirectory multiple hidden />
       <div class="actions">

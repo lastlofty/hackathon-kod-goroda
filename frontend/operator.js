@@ -26,15 +26,22 @@ const captureSurvey = (() => {
   const hasPoint = (obj) =>
     Number.isFinite(obj?.lat) && Number.isFinite(obj?.lon);
   const shortName = (name) => name.split("/").at(-1);
+  const cabinetTypes = ["повреждение ЛКП", "деформация", "нарушение крепления", "отсутствие двери"];
+  const defectsOf = (value) => value?.defects ?? (value?.defect && !["none", "normal", "ok"].includes(value.defect) ? [value.defect] : []);
+  const defectText = (value) => defectsOf(value).map(label).join(", ");
   const verdict = (obj) => {
     if (obj.verdict === "ok") return "Дефекта нет";
     if (obj.verdict === "defect") return "Есть дефект";
     if (obj.verdict === "unknown") return "Требует проверки";
-    if (obj.defect && !["none", "normal", "ok"].includes(obj.defect))
+    if (defectsOf(obj).length)
       return "Есть дефект";
     return obj.status === "normal" ? "Дефекта нет" : "Требует проверки";
   };
   const chosen = new Map();
+  const panoramaCount = 20;
+  const panoramaDir = "./assets/moscow-panorama-photos/";
+  const panoramaName = (number) => "moscow-" + String(number).padStart(3, "0") + ".jpg";
+  let selectedPanorama = null;
   let inferenceMode = "disabled";
 
   function message(text) {
@@ -116,20 +123,21 @@ const captureSurvey = (() => {
           boxes: [],
         };
         for (const d of f.detections || []) {
-          const [cx, cy, w, h] = d.bbox;
+
           const box = {
             id: d.det_id,
             label: label(d.class),
-            x: cx - w / 2,
-            y: cy - h / 2,
-            w,
-            h,
+
             owner: d.object_id,
             score: d.score,
             inference: d.inference,
-            defect: d.defect,
+            defects: defectsOf(d),
             defectScore: d.defect_score,
           };
+          if (d.bbox) {
+            const [cx, cy, w, h] = d.bbox;
+            Object.assign(box, {x: cx - w / 2, y: cy - h / 2, w, h});
+          }
           frame.boxes.push(box);
           lookup.set(box.id, { frame, box });
         }
@@ -151,15 +159,19 @@ const captureSurvey = (() => {
         : "unverified";
       return {
         id: o.object_id,
+        displayId: data.result.source === "dataset" ? best?.frame.name : undefined,
+        datasetLabel: data.result.source === "dataset",
+        description: o.description,
         type: label(o.class),
         frame: best?.frame.id,
         box: o.best_det_id,
         point: best?.frame.cameraPoint,
-        assetPoint: pointOf(o),
+        assetPoint: pointOf(data.manual_locations?.[o.object_id]) || pointOf(o),
+        manualLocation: Boolean(data.manual_locations?.[o.object_id]),
         pointKind: "observation",
         priority,
-        issue: o.defect ? label(o.defect) : undefined,
-        defect: o.defect,
+        issue: defectText(o),
+        defects: defectsOf(o),
         verdict: verdict(o),
         confidence: Number.isFinite(o.defect_score)
           ? Math.round(o.defect_score * 100)
@@ -242,11 +254,18 @@ const captureSurvey = (() => {
     for (const group of groups.values())
       if (group.frames.length > 1)
         group.type = "Кадров в точке: " + group.frames.length;
+    for (const obj of visibleObjects()) {
+      if (obj.manualLocation || (isValidPoint(obj.assetPoint) && !isValidPoint(obj.point))) {
+        const id = "object:" + obj.id;
+        groups.set(id, {id, point: obj.assetPoint, objectId: obj.id, type: obj.type,
+          displayId: displayId(obj), frames: []});
+      }
+    }
     return [...groups.values()];
   }
   function markMap() {
     const groups = mapPoints();
-    const current = groups.find((g) =>
+    const current = groups.find((g) => g.objectId && g.objectId === state.selected) || groups.find((g) =>
       g.frames.some((f) => f.id === selectedFrame),
     );
     inspectionMap?.setMarkers(groups, current?.id);
@@ -257,12 +276,14 @@ const captureSurvey = (() => {
   function openPoint(id) {
     const group = mapPoints().find((g) => g.id === id);
     if (!group) return;
+    if (group.objectId) return selectObject(group.objectId, true);
     pointGroup = group.frames.length > 1 ? id : null;
     selectFrame(group.frames[0].id, false, true);
   }
   function selectFrame(id, pan = false, fromPoint = false) {
     const frame = frameById(id);
     if (!frame) return;
+    selectedPanorama = null;
     if (!fromPoint) pointGroup = null;
     heldFrame = true;
     state.selected = null;
@@ -276,6 +297,7 @@ const captureSurvey = (() => {
   function selectObject(id, pan = false) {
     const obj = records.objects.find((o) => o.id === id);
     if (!obj) return;
+    selectedPanorama = null;
     heldFrame = false;
     pointGroup = null;
     state.selected = id;
@@ -283,9 +305,14 @@ const captureSurvey = (() => {
     state.overlay = true;
     if (state.view !== "map") switchView("map");
     renderCard();
-    if (pan && isValidPoint(obj.point)) inspectionMap?.panTo(obj.point);
+    const point = obj.manualLocation ? obj.assetPoint : obj.point || obj.assetPoint;
+    if (pan && isValidPoint(point)) inspectionMap?.panTo(point);
   }
   function step(direction) {
+    if (selectedPanorama !== null) {
+      selectPanorama((selectedPanorama - 1 + direction + panoramaCount) % panoramaCount + 1);
+      return;
+    }
     const objects = visibleObjects();
     if (state.selected && objects.length) {
       const i = objects.findIndex((o) => o.id === state.selected);
@@ -305,7 +332,31 @@ const captureSurvey = (() => {
   }
   function renderDeck() {
     const frames = availableFrames();
-    el("deck-title").textContent = "Кадры съёмки";
+    const cabinetDataset = job?.result?.source === "dataset" &&
+      records.objects.some(obj => obj.type === "ТКШ" || obj.type === "РЩ");
+    el("deck-title").textContent = cabinetDataset ? "Исходники МГТС" : "Кадры съёмки";
+    el("panorama-deck").hidden = !cabinetDataset;
+    if (cabinetDataset && !el("panorama-frames").childElementCount) {
+      el("panorama-count").textContent = "Кадров: " + panoramaCount;
+      const reel = document.createDocumentFragment();
+      for (let number = 1; number <= panoramaCount; number++) {
+        const name = panoramaName(number);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "film-shot";
+        button.dataset.panorama = number;
+        button.setAttribute("aria-pressed", "false");
+        const img = document.createElement("img");
+        img.loading = "lazy";
+        img.alt = "";
+        img.src = panoramaDir + "thumbs/" + name;
+        const caption = document.createElement("span");
+        caption.textContent = name;
+        button.append(img, caption);
+        reel.append(button);
+      }
+      el("panorama-frames").append(reel);
+    }
     el("route-count").textContent = frames.length
       ? "Кадров: " + frames.length
       : "";
@@ -316,7 +367,7 @@ const captureSurvey = (() => {
             '<button class="film-shot" data-capture="' +
             escapeHTML(f.id) +
             '" aria-pressed="' +
-            (f.id === selectedFrame) +
+            (selectedPanorama === null && f.id === selectedFrame) +
             '" title="' +
             escapeHTML(f.name) +
             '"><img loading="lazy" src="' +
@@ -328,7 +379,82 @@ const captureSurvey = (() => {
         .join("") || '<p class="subtle">Нет загруженных кадров.</p>';
     el("route-report").hidden = !records.objects.length || state.view !== "map";
   }
+  function selectPanorama(number) {
+    selectedPanorama = number;
+    renderCard();
+    const reel = el("panorama-frames");
+    const shot = reel.children[number - 1];
+    const bounds = reel.getBoundingClientRect();
+    const rect = shot.getBoundingClientRect();
+    if (rect.left < bounds.left) reel.scrollLeft += rect.left - bounds.left;
+    else if (rect.right > bounds.right) reel.scrollLeft += rect.right - bounds.right;
+  }
+  function reviewFields(obj) {
+    const values = reviewed(obj) === "confirmed" ? defectsOf(obj.inspectionReview) : defectsOf(obj);
+    if (["ТКШ", "РЩ"].includes(obj.type)) {
+      return '<fieldset id="cabinet-defects"><legend>Дефекты</legend>' +
+        [...new Set([...cabinetTypes, ...values])].map(value =>
+          '<label><input type="checkbox" value="' + escapeHTML(value) + '"' +
+          (values.includes(value) ? " checked" : "") + "> " + escapeHTML(label(value)) + "</label>"
+        ).join("") + "</fieldset>";
+    }
+    return '<label class="filter-label">Дефекты через запятую <input id="defect" value="' +
+      escapeHTML(values.join(", ")) + '"></label>';
+  }
+
+  function locationForm(obj) {
+    if (!obj || job?.id === "demo") return "";
+    const [lon, lat] = obj.assetPoint || [];
+    return '<details class="cabinet-location"><summary>' +
+      (obj.manualLocation ? "Изменить точку объекта" : "Указать точку объекта") +
+      '</summary><form id="object-location">' +
+      '<label>Широта <input name="lat" type="number" step="any" min="-90" max="90" required value="' +
+      (lat ?? "") + '"></label><label>Долгота <input name="lon" type="number" step="any" min="-180" max="180" required value="' +
+      (lon ?? "") + '"></label><button class="button">Сохранить точку</button></form></details>';
+  }
+
+  async function saveLocation(event, obj) {
+    event.preventDefault();
+    const form = event.currentTarget, target = job;
+    form.querySelector("button").disabled = true;
+    try {
+      const saved = await api("/surveys/" + target.id + "/object-location", {
+        method: "PATCH", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({object_id: obj.id, lat: form.elements.lat.valueAsNumber, lon: form.elements.lon.valueAsNumber}),
+      });
+      if (job !== target) return;
+      obj.assetPoint = pointOf(saved);
+      obj.manualLocation = true;
+      renderCard();
+      if (state.selected === obj.id) inspectionMap?.panTo(obj.assetPoint);
+      announce("Точка объекта сохранена.");
+    } catch (e) {
+      if (job === target) announce(e.message);
+    } finally {
+      form.querySelector("button").disabled = false;
+    }
+  }
   function renderCard() {
+    const reel = el("panorama-frames");
+    reel.querySelector('[aria-pressed="true"]')?.setAttribute("aria-pressed", "false");
+    if (selectedPanorama !== null && !el("panorama-deck").hidden) {
+      reel.children[selectedPanorama - 1].setAttribute("aria-pressed", "true");
+      el("route-frames").querySelector('[aria-pressed="true"]')?.setAttribute("aria-pressed", "false");
+      el("position").textContent = selectedPanorama + " / " + panoramaCount;
+      document.querySelectorAll('[data-action="prev"],[data-action="next"]').forEach(b => b.disabled = false);
+      const name = panoramaName(selectedPanorama);
+      el("inspector-content").innerHTML =
+        '<div class="record-head"><div class="record-id">Панорамы Москвы · Яндекс Карты</div><h2>' + name + '</h2></div>' +
+        '<div class="frame-panel panorama-preview"><figure class="frame"><img src="' + panoramaDir + name + '" alt="Снимок московской панорамы"></figure>' +
+        '<div class="frame-tools"><button type="button" id="return-to-capture" class="button">К исходникам МГТС</button>' +
+        '<a class="button" download href="' + panoramaDir + name + '">Скачать JPEG</a></div></div>';
+      el("return-to-capture").onclick = () => {
+        selectedPanorama = null;
+        renderCard();
+        el("route-frames").querySelector('[aria-pressed="true"]')?.focus({ preventScroll: true });
+      };
+      return;
+    }
     const objects = visibleObjects(),
       frames = availableFrames();
     let obj = objects.find((o) => o.id === state.selected);
@@ -416,7 +542,7 @@ const captureSurvey = (() => {
         !state.overlay +
         '">Исходник</button><button data-action="overlay" aria-pressed="' +
         state.overlay +
-        '">Результат модели</button></div>' +
+        '">' + (job?.result?.source === "dataset" ? "Данные таблицы" : "Результат модели") + "</button></div>" +
         frameChoice +
         "</div></div>"
       : "";
@@ -425,13 +551,8 @@ const captureSurvey = (() => {
       review =
         '<section class="review-controls"><div class="review-heading"><h3>Проверка дефекта</h3><span>' +
         escapeHTML(reviewLabel(obj)) +
-        '</span></div><div class="review-buttons"><label class="filter-label">Тип <input id="defect" maxlength="256" value="' +
-        escapeHTML(
-          reviewed(obj) === "confirmed"
-            ? obj.inspectionReview.defect
-            : obj.defect || "",
-        ) +
-        '"></label><button class="button confirm" data-survey-decision="confirmed">Подтвердить</button><button class="button" data-survey-decision="rejected">Дефекта нет</button></div></section>';
+        '</span></div><div class="review-buttons">' + reviewFields(obj) +
+        '<button class="button confirm" data-survey-decision="confirmed">Подтвердить</button><button class="button" data-survey-decision="rejected">Дефекта нет</button></div></section>';
     } else if (frame) {
       review =
         '<section class="review-controls"><div class="review-heading"><h3>Результаты на кадре</h3></div><div class="review-buttons">' +
@@ -451,7 +572,7 @@ const captureSurvey = (() => {
           .join("") ||
           '<span class="subtle">' +
             (job?.status === "completed"
-              ? "Объекты на кадре не обнаружены."
+              ? (job.result?.source === "dataset" ? "Для этого фото нет строки в таблице." : "Объекты на кадре не обнаружены.")
               : "Ожидаем результат обработки.") +
             "</span>") +
         "</div></section>";
@@ -468,8 +589,9 @@ const captureSurvey = (() => {
       review +
       '<div class="record-data"><dl>' +
       (obj
-        ? field("Вердикт модели", obj.verdict) +
-          field("Тип дефекта модели", obj.issue) +
+        ? field(obj.datasetLabel ? "Состояние по таблице" : "Вердикт модели", obj.verdict) +
+          field("Дефекты", obj.issue || "—") +
+          (obj.description ? field("Описание из таблицы", obj.description) : "") +
           field(
             "Уверенность в дефекте",
             obj.confidence == null ? "—" : obj.confidence + "%",
@@ -480,14 +602,14 @@ const captureSurvey = (() => {
       field(
         "Место съёмки",
         isValidPoint(frame?.cameraPoint)
-          ? formatPoint(frame.cameraPoint)
+          ? formatPoint(frame.cameraPoint) + (frame.locationSource === "exif" ? " · GPS фото (EXIF)" : "")
           : "Без геометки",
       ) +
       (isValidPoint(obj?.assetPoint)
-        ? field("Координаты объекта", formatPoint(obj.assetPoint))
+        ? field(obj.manualLocation ? "Точка объекта · введена вручную" : "Координаты объекта", formatPoint(obj.assetPoint))
         : "") +
       (frame ? field("Съёмка", frame.time || "—") : "") +
-      "</dl>" +
+      "</dl>" + locationForm(obj) +
       (activeBox
         ? "<details><summary>Сведения о детекции</summary><dl>" +
           (activeBox.inference?.model_name ? field("Модель", [activeBox.inference.model_name, activeBox.inference.model_version].filter(Boolean).join(" · ")) : "") +
@@ -495,7 +617,7 @@ const captureSurvey = (() => {
           (activeBox.inference?.severity != null ? field("Оценка опасности", activeBox.inference.severity) : "") +
           (activeBox.inference?.recommendation ? field("Рекомендация", activeBox.inference.recommendation) : "") +
           field("Уверенность в обнаружении", percent(activeBox.score)) +
-          field("Дефект на кадре", label(activeBox.defect)) +
+          field("Дефекты на кадре", defectText(activeBox) || "—") +
           field(
             "Уверенность в дефекте на кадре",
             percent(activeBox.defectScore),
@@ -512,9 +634,10 @@ const captureSurvey = (() => {
         : "") +
       "</div></div>";
     showPointAddress(
-      { point: frame?.cameraPoint, place: obj?.place },
+      { point: obj?.manualLocation ? obj.assetPoint : frame?.cameraPoint || obj?.assetPoint, place: obj?.place },
       el("point-address"),
     );
+    el("object-location")?.addEventListener("submit", (event) => saveLocation(event, obj));
     el("point-frames")?.addEventListener("change", (e) =>
       selectFrame(e.target.value, false, true),
     );
@@ -537,7 +660,7 @@ const captureSurvey = (() => {
           "</button></td><td>" +
           escapeHTML(reviewLabel(o)) +
           "</td><td>" +
-          escapeHTML(o.inspectionReview.defect || "—") +
+          escapeHTML(defectText(o.inspectionReview) || "—") +
           "</td></tr>",
       )
       .join("");
@@ -608,7 +731,7 @@ const captureSurvey = (() => {
             escapeHTML(o.type + " · " + displayId(o)) +
             "</strong><p>" +
             escapeHTML(
-              [o.verdict, o.issue, reviewLabel(o), o.inspectionReview?.defect]
+              [o.verdict, o.issue, reviewLabel(o), defectText(o.inspectionReview)]
                 .filter(Boolean)
                 .join(" · "),
             ) +
@@ -751,15 +874,17 @@ const captureSurvey = (() => {
     const target = job,
       obj = records.objects.find((o) => o.id === state.selected);
     if (!target || !obj) return;
-    const defect = decision === "confirmed" ? el("defect").value.trim() : null;
-    if (decision === "confirmed" && !defect) {
-      el("defect").focus();
-      announce("Укажите тип дефекта.");
+    const defects = decision !== "confirmed" ? [] : el("cabinet-defects")
+      ? Array.from(el("cabinet-defects").querySelectorAll(":checked"), input => input.value)
+      : [...new Set(el("defect").value.split(",").map(value => value.trim()).filter(Boolean))];
+    if (decision === "confirmed" && !defects.length) {
+      (el("defect") || el("cabinet-defects").querySelector("input")).focus();
+      announce("Укажите хотя бы один дефект.");
       return;
     }
     saving = true;
     try {
-      const payload = { object_id: obj.id, decision, defect };
+      const payload = { object_id: obj.id, decision, defects };
       if (target.id === "demo") {
         let all = {};
         try {
@@ -864,6 +989,7 @@ const captureSurvey = (() => {
     state.selected = null;
     state.filter = el("priority-filter").value = "all";
     selectedClass = "";
+    selectedPanorama = null;
     selectedFrame = null;
     heldFrame = false;
     pointGroup = null;
@@ -951,6 +1077,19 @@ const captureSurvey = (() => {
     document.querySelector('[data-action="route-geojson"]').hidden = true;
     el("priority-filter").querySelector('[value="retake"]').remove();
     el("job-select").onchange = (e) => selectJob(e.target.value);
+    el("panorama-frames").addEventListener("click", (e) => {
+      const shot = e.target.closest("[data-panorama]");
+      if (shot) selectPanorama(Number(shot.dataset.panorama));
+    });
+    el("panorama-frames").addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const shot = e.target.closest("[data-panorama]");
+      if (!shot) return;
+      e.preventDefault();
+      const number = Number(shot.dataset.panorama);
+      selectPanorama((number - 1 + (e.key === "ArrowLeft" ? -1 : 1) + panoramaCount) % panoramaCount + 1);
+      el("panorama-frames").children[selectedPanorama - 1].focus({preventScroll: true});
+    });
     document.addEventListener("click", (e) => {
       const control = e.target.closest("button");
       if (!control) return;
@@ -1004,7 +1143,7 @@ const captureSurvey = (() => {
   function selectFiles(input) {
     for (const f of input.files) {
       const path = f.webkitRelativePath || f.name;
-      if (/\.(jpe?g|png|webp|mp4|mov|webm|gpx|yaml|yml|json|txt)$/i.test(path))
+      if (/\.(jpe?g|png|webp|mp4|mov|webm|gpx|yaml|yml|json|txt|zip|xlsx)$/i.test(path))
         chosen.set(path, f);
     }
     input.value = "";
@@ -1032,7 +1171,7 @@ const captureSurvey = (() => {
     const form = new FormData(),
       first = chosen.keys().next().value;
     if (!first) return;
-    form.set("name", first.split("/")[0]);
+    form.set("name", [...chosen.keys()].every(name => /\.zip$/i.test(name)) ? [...chosen.keys()].map(name => shortName(name)).join(" + ") : first.split("/")[0]);
     if (el("run-detection").checked) form.set("inference_mode", inferenceMode);
     for (const [path, file] of chosen) form.append("files", file, path);
     const controls = ["submit", "pick-files", "pick-folder", "cancel", "run-detection"];

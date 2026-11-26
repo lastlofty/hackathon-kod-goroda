@@ -260,6 +260,11 @@ survey-crop canvas,survey-crop img { display:block; max-width:100%; height:auto 
 
 .deck-head { flex-wrap:wrap; justify-content:flex-start }
 #route-count { margin-left:auto }
+#panorama-count { margin-left:auto }
+#panorama-deck { margin-top:8px; padding-top:8px; border-top:1px solid var(--line) }
+#panorama-deck .film-shot::before { content:none }
+#panorama-deck .film-shot:focus-visible { outline:2px solid var(--brand); outline-offset:-2px }
+#inspector-content .panorama-preview { margin-bottom:12px }
 #live-status { color:var(--muted); font-size:11px }
 #live-toggle,#live-return { min-height:26px; padding:3px 8px; font-size:12px }
 #live-toggle[aria-pressed=true],#live-return { border-color:var(--brand); color:var(--brand) }
@@ -414,3 +419,9 @@ button.path-shape .path-ink,.editor-image[data-mode="edit"] .path-ink { pointer-
   .topbar nav button { flex:1; min-height:32px }
   .survey-bar:has(#status:not([hidden])) #status { grid-column:1/-1 }
 }
+
+#cabinet-defects { display:flex; flex:1 0 100%; flex-wrap:wrap; gap:4px 12px; border:0; padding:0; margin:0 }
+#cabinet-defects legend { color:var(--muted) }
+#cabinet-defects label, .cabinet-location label { display:inline-flex; align-items:center; gap:4px }
+.cabinet-location form { display:flex; flex-wrap:wrap; align-items:end; gap:6px; margin:6px 0 }
+.cabinet-location input { width:9em; max-width:100% }

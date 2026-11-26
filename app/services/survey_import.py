@@ -7,6 +7,7 @@ import yaml
 
 from app.models import Media
 from app.schemas.survey_result import SurveyResult
+from app.services.cabinet_dataset import cabinet_result
 from app.services.photo_metadata import image_path_index
 
 IMAGE_SUFFIX = {".jpg", ".jpeg", ".webp", ".png"}
@@ -24,6 +25,8 @@ def image_or_video_suffix(name, head):
         ".mov": head[4:8] in (b"ftyp", b"moov", b"mdat", b"wide"),
         ".webm": head.startswith(b"\x1aE\xdf\xa3"),
     }
+    if suffix in IMAGE_SUFFIX and valid[".webp"]:
+        return ".webp"
     if not valid.get(suffix):
         raise ValueError(f"Неподдерживаемое содержимое файла {name}")
     return suffix
@@ -79,6 +82,9 @@ def imported_result(inputs, sidecars):
         if len(manifests) != 1:
             raise ValueError("Для одной загрузки нужен один JSON результата")
         return SurveyResult.model_validate_json(sidecars[manifests[0]])
+    sheets = {p: data for p, data in sidecars.items() if p.lower().endswith(".xlsx")}
+    if sheets:
+        return cabinet_result(inputs, sheets)
     configs = [p for p in sidecars if p.lower().endswith((".yaml", ".yml"))]
     labels = {}
     for path, data in sidecars.items():
